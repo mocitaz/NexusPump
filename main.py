@@ -8,7 +8,7 @@ from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, Callb
 
 # Modules
 from data_fetcher import get_stock_price, get_top_gainers_losers_idx, get_stock_news, get_stock_fundamentals
-from chart_generator import generate_chart
+from chart_generator import generate_chart, generate_portfolio_pie
 from analyzer import analyze_stock, predict_future_price, scan_bsjp_strategy, scan_market_screener, scan_whale_flow, scan_top_picks, scan_sector_performance
 from market_pulse import calculate_market_mood, generate_gauge_chart
 from idx_tickers import IDX_WATCHLIST
@@ -182,7 +182,22 @@ async def chart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target_msg = update.message if update.message else update.callback_query.message
     status_msg = await target_msg.reply_text(f"🎨 *Menggambar Chart {ticker}...*", parse_mode='Markdown')
     
-    img_buf = generate_chart(ticker, period)
+    # Get Pivot Points for S/R Lines
+    # We use analyze_stock (reusing logic is smart)
+    # But analyze_stock is heavy (AI scoring etc).
+    # Let's assume we want S/R. analyze_stock returns 'pivot_points': {'S1':.., 'R1':..}
+    # It might be slightly slower but gives consistent levels with /analisa.
+    
+    analysis = await asyncio.to_thread(analyze_stock, ticker)
+    levels = []
+    if analysis and 'pivot_points' in analysis:
+        p = analysis['pivot_points']
+        levels = [p['S1'], p['S2'], p['R1'], p['R2']]
+        # Filter out 0 or None
+        levels = [l for l in levels if l and l > 0]
+    
+    img_buf = await asyncio.to_thread(generate_chart, ticker, period, levels)
+    
     if img_buf:
         time_str = datetime.datetime.now(pytz.timezone('Asia/Jakarta')).strftime('%H:%M')
         kb = get_common_keyboard(ticker)
@@ -197,7 +212,7 @@ async def chart(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "━━━━━━━━━━━━━━━━━━━━━━\n"
                 "• 🔵 Line Biru: MA20 (Short Term)\n"
                 "• 🟠 Line Oranye: MA50 (Medium Term)\n"
-                "• ⚫ Line Hitam: MA100 (Long Term)\n"
+                "• ⚪ Putus-Putus: Support & Resistance\n"
                 "• 📊 Sub-plot: RSI & MACD Momentum"
             ),
             parse_mode='Markdown',
@@ -462,6 +477,9 @@ async def porto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     total_cost = 0
     lines = []
     
+    # Prepare data for Pie Chart
+    pie_data = {}
+    
     for t, data in holdings.items():
         # Get Price
         p_data = get_stock_price(t) # Live price
@@ -477,6 +495,8 @@ async def porto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         total_val += mkt_val
         total_cost += cost_val
+        
+        pie_data[t] = {'current_value': mkt_val}
         
         icon = "🟢" if pnl >= 0 else "🔴"
         lines.append(
@@ -496,7 +516,22 @@ async def porto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
     msg = header + "\n\n".join(lines)
-    await waiting.edit_text(msg, parse_mode='Markdown')    
+    
+    # Generate Pie Chart
+    try:
+        pie_buf = await asyncio.to_thread(generate_portfolio_pie, pie_data, total_val)
+        if pie_buf:
+            await waiting.delete()
+            await target_msg.reply_photo(
+                photo=pie_buf,
+                caption=msg,
+                parse_mode='Markdown'
+            )
+        else:
+             await waiting.edit_text(msg, parse_mode='Markdown')
+    except Exception as e:
+        logger.error(f"Error sending portfolio pie: {e}")
+        await waiting.edit_text(msg, parse_mode='Markdown')    
 
 # --- Button Callback Handler ---
 

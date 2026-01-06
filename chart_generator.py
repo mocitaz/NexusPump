@@ -9,11 +9,10 @@ from data_fetcher import get_historical_data
 
 logger = logging.getLogger(__name__)
 
-def generate_chart(ticker, period="1mo"):
+def generate_chart(ticker, period="1mo", sup_res_levels=None):
     """
     Generates a premium Dark Mode candlestick chart with MA, RSI, and MACD.
-    Fetches '1y' data regardless of requested period to ensure valid MA50/MA200, 
-    then slices for display.
+    sup_res_levels: list of prices [S1, R1, ...] to draw dashed lines.
     """
     try:
         # 1. Fetch SUFFICIENT Data (Always 1y minimum for MA200)
@@ -55,19 +54,10 @@ def generate_chart(ticker, period="1mo"):
             df_plot = df_full.copy()
             
         # 4. Prepare AddPlots (Using SLICED Data)
-        # We must recalculate addplots based on the sliced dataframe columns ??
-        # No, we just use the columns we added to df_full, which are now in df_plot
-        
-        # Check if we have enough valid data in the slice (avoid all-NaN plot crash)
-        # But even if MA200 is NaN in the displayed region, mpf should handle it if other data exists.
-        # However, to be safe, fillna? No, gaps are better.
-        
         addplots = [
              # MA Lines
             mpf.make_addplot(df_plot['MA20'], color='#00f2ff', width=1.5, panel=0), # Cyan
             mpf.make_addplot(df_plot['MA50'], color='#ff9100', width=1.5, panel=0), # Orange
-            # Only plot MA100 if it has values in the slice
-            # mpf.make_addplot(df_plot['MA100'], color='#ffffff', width=1, panel=0),
             
             # RSI
             mpf.make_addplot(df_plot['rsi'], panel=2, color='#b026ff', ylabel='RSI', width=1.5),
@@ -96,6 +86,21 @@ def generate_chart(ticker, period="1mo"):
                 'text.color': '#e0e0e0', 'axes.labelcolor': '#e0e0e0', 'xtick.color': '#808080', 'ytick.color': '#808080'}
         )
         
+        # 6. S/R Lines Logic
+        hlines_dict = dict(hlines=[], colors=[], linestyle='-.', linewidths=0.8)
+        if sup_res_levels:
+            # We want to filter levels that are within the plot range (optional, mpf handles it but better to be safe)
+            # Just pass them all, mpf is smart.
+            hlines_dict['hlines'] = sup_res_levels
+            # Color logic: Green for below price (Support), Red for above (Resistance)?
+            # Or just white/grey dashed lines for all.
+            # Let's use Cyan/Yellow for visibility.
+            hlines_dict['colors'] = ['#ffffff'] * len(sup_res_levels)
+        
+        # If no levels, remove the arg or pass empty
+        if not hlines_dict['hlines']:
+            hlines_dict = None
+
         buf = io.BytesIO()
         
         mpf.plot(
@@ -109,7 +114,8 @@ def generate_chart(ticker, period="1mo"):
             datetime_format='%d-%b',
             tight_layout=True,
             scale_width_adjustment=dict(volume=0.7, candle=1.2),
-            savefig=dict(fname=buf, dpi=120, bbox_inches='tight', facecolor='#0a0a0a')
+            savefig=dict(fname=buf, dpi=120, bbox_inches='tight', facecolor='#0a0a0a'),
+            hlines=hlines_dict
         )
         
         buf.seek(0)
@@ -117,4 +123,71 @@ def generate_chart(ticker, period="1mo"):
         
     except Exception as e:
         logger.error(f"Error generating chart for {ticker}: {e}")
+        return None
+
+def generate_portfolio_pie(holdings, total_value, cash_balance=0):
+    """
+    Generates a dark-themed pie chart for portfolio allocation.
+    holdings: dict of {ticker: {'current_value': 12345}}
+    total_value: float
+    cash_balance: float (optional)
+    """
+    try:
+        import matplotlib.pyplot as plt
+        
+        # Prepare Data
+        labels = []
+        sizes = []
+        colors = []
+        
+        # Color Palette (Cyberpunk/Neon)
+        palette = ['#00f2ff', '#ff0055', '#b026ff', '#ff9100', '#00ff44', '#ffff00', '#ffffff', '#808080']
+        
+        # Add Stocks
+        i = 0
+        for ticker, data in holdings.items():
+            val = data.get('current_value', 0)
+            if val > 0:
+                labels.append(ticker)
+                sizes.append(val)
+                colors.append(palette[i % len(palette)])
+                i += 1
+                
+        # Add Cash (if any/significant) - Assuming fully invested for now or handled outside
+        # If we had cash tracking, we'd add it here.
+        
+        if not sizes: return None
+        
+        # Plot
+        fig, ax = plt.subplots(figsize=(6, 6), facecolor='#0a0a0a')
+        
+        wedges, texts, autotexts = ax.pie(
+            sizes, 
+            labels=labels, 
+            autopct='%1.1f%%', 
+            startangle=90, 
+            colors=colors,
+            pctdistance=0.85,
+            textprops=dict(color="w")
+        )
+        
+        # Donut Style
+        centre_circle = plt.Circle((0,0),0.70,fc='#0a0a0a')
+        fig.gca().add_artist(centre_circle)
+        
+        # Styling
+        plt.setp(texts, size=10, weight="bold")
+        plt.setp(autotexts, size=9, weight="bold", color="#000000")
+        
+        # Title
+        ax.set_title(f"PORTFOLIO ALLOCATION\nRp {total_value:,.0f}", color='white', pad=20, fontsize=12, fontweight='bold')
+        
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', facecolor='#0a0a0a', bbox_inches='tight', dpi=100)
+        plt.close(fig)
+        buf.seek(0)
+        return buf
+        
+    except Exception as e:
+        logger.error(f"Error generating pie chart: {e}")
         return None
