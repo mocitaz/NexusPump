@@ -11,22 +11,56 @@ logger = logging.getLogger(__name__)
 class StockMonitor:
     def __init__(self, watchlist=None):
         if watchlist is None:
-            # Use the extensive list by default
             self.watchlist = IDX_WATCHLIST
         else:
             self.watchlist = watchlist
+        
+        # Spam Protection: Store last alert time for each ticker
+        self.alert_cooldowns = {}
+
+    def is_market_open(self):
+        """
+        Checks if IDX market is currently open (09:00 - 16:15 WIB, Mon-Fri).
+        """
+        tz_jkt = pytz.timezone('Asia/Jakarta')
+        now = datetime.datetime.now(tz_jkt)
+        
+        # 1. Check Weekend
+        if now.weekday() > 4: # 5=Sat, 6=Sun
+            return False
+            
+        # 2. Check Time
+        current_time = now.time()
+        start_time = datetime.time(9, 0)
+        end_time = datetime.time(16, 15)
+        
+        if start_time <= current_time <= end_time:
+            return True
+        return False
 
     async def scan_market(self, context=None):
         """
-        Scans the watchlist for significant moves:
-        - Price increase > 3% (Sensitive)
-        - RSI < 70 (Ensure not already overbought if volume is high)
+        Scans values. Returns list of alert strings.
         """
+        # 1. Market Hours Check
+        if not self.is_market_open():
+            return []
+            
         alerts = []
         logger.info("Scanning market for alerts...")
         
+        tz_jkt = pytz.timezone('Asia/Jakarta')
+        now = datetime.datetime.now(tz_jkt)
+        time_str = now.strftime('%H:%M')
+        
         for ticker in self.watchlist:
             try:
+                # 2. Cooldown Check (4 Hours)
+                if ticker in self.alert_cooldowns:
+                    last_alert = self.alert_cooldowns[ticker]
+                    if (now - last_alert).total_seconds() < 14400: 
+                        continue
+                
                 # Fetch fresh data
                 data = get_stock_price(ticker)
                 if not data:
@@ -39,30 +73,21 @@ class StockMonitor:
                 # Check 1: Significant Gain (>3%)
                 if change_pct >= 3.0:
                     
-                    # Quick check on RSI to avoid alert on exhausted trend
-                    # This requires historical data, which might slow down the loop.
-                    # Optimization: Only check RSI if gain is detected.
+                    # Quick RSI check
                     try:
-                        from analyzer import analyze_stock
-                        # We use analyze_stock implicitly or just fetch history quick
                         from data_fetcher import get_historical_data
                         import ta
                         
                         hist = get_historical_data(ticker, period="1mo")
                         if not hist.empty and len(hist) > 14:
-                            # Recalculate RSI quick
                             rsi = ta.momentum.RSIIndicator(hist['Close'], window=14).rsi().iloc[-1]
                         else:
-                            rsi = 50 # Default neutral if no data
-                            
+                            rsi = 50
                     except Exception as e:
-                        logger.warning(f"RSI check failed for {ticker}: {e}")
+                        # logger.warning(f"RSI check failed for {ticker}: {e}")
                         rsi = 50
 
-                    # Smart Trigger:
-                    # 1. Gain > 3% AND RSI < 70 (Room to grow)
-                    # 2. OR Gain > 5% (Strong pump regardless of RSI)
-                    
+                    # Smart Trigger
                     is_alert = False
                     reason = ""
                     
@@ -72,17 +97,21 @@ class StockMonitor:
                     elif change_pct > 3.0 and rsi < 70:
                         is_alert = True
                         reason = f"⚡ PERGERAKAN SIGNIFIKAN (>3%, RSI {rsi:.1f})"
+                    elif volume > 500000000 and change_pct > 2.0:
+                         is_alert = True
+                         reason = "🔊 VOLUME SPIKE (Big Money Flow)"
 
                     if is_alert:
                         # Premium Alert Format
                         emoji_alert = "🚀" if change_pct > 0 else "🔻"
                         alert_msg = (
                             f"🔔 *NEXUS SIGNAL ALERT* {emoji_alert}\n"
+                            f"⏰ Pukul: {time_str} WIB\n"
                             f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
                             f"💎 *{ticker}* (IDX)\n\n"
                             f"💵 *Harga*: Rp {price:,.0f}\n"
                             f"📈 *Kenaikan*: +{change_pct:.2f}%\n"
-                            f"🔊 *Volume*: {volume:,.0f} (High Activity)\n"
+                            f"🔊 *Volume*: {volume:,.0f}\n"
                             f"📊 *RSI (14)*: {rsi:.1f}\n\n"
                             f"📝 *Analisis Singkat*:\n"
                             f"{reason}\n\n"
@@ -91,6 +120,9 @@ class StockMonitor:
                             f"Analisis AI: `/analisa {ticker}`"
                         )
                         alerts.append(alert_msg)
+                        
+                        # 3. Set Cooldown
+                        self.alert_cooldowns[ticker] = now
             
             except Exception as e:
                 logger.error(f"Error scanning {ticker}: {e}")
