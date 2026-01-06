@@ -307,9 +307,16 @@ async def gainers(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target_msg = update.message if update.message else update.callback_query.message
     waiting = await target_msg.reply_text("🔎 *Scanning Top Gainers...*", parse_mode='Markdown')
     
-    # Async Fix: Run blocking IO in thread pool
+    # Async Fix: Run blocking IO in thread pool with Timeout
     try:
-        g, _ = await asyncio.to_thread(get_top_gainers_losers_idx)
+        g, _ = await asyncio.wait_for(
+            asyncio.to_thread(get_top_gainers_losers_idx),
+            timeout=25.0
+        )
+    except asyncio.TimeoutError:
+        logger.error("Gainers scan timed out.")
+        await waiting.edit_text("⚠️ *Timeout*. Server sibuk. Coba lagi dalam 1 menit.")
+        return
     except Exception as e:
         logger.error(f"Gainers error: {e}")
         await waiting.edit_text("❌ Terjadi kesalahan saat mengambil data.")
@@ -343,9 +350,16 @@ async def losers(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target_msg = update.message if update.message else update.callback_query.message
     waiting = await target_msg.reply_text("🔎 *Scanning Top Losers...*", parse_mode='Markdown')
     
-    # Async Fix
+    # Async Fix with Timeout
     try:
-        _, l = await asyncio.to_thread(get_top_gainers_losers_idx)
+        _, l = await asyncio.wait_for(
+            asyncio.to_thread(get_top_gainers_losers_idx),
+            timeout=25.0
+        )
+    except asyncio.TimeoutError:
+        logger.error("Losers scan timed out.")
+        await waiting.edit_text("⚠️ *Timeout*. Server sibuk. Coba lagi dalam 1 menit.")
+        return
     except Exception as e:
         logger.error(f"Losers error: {e}")
         await waiting.edit_text("❌ Terjadi kesalahan saat mengambil data.")
