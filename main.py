@@ -117,7 +117,7 @@ async def screener(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lines.append(line)
         
     lines.append("-" * 25)
-    lines.append(f"📅 Data: {results[0]['date']}")
+    lines.append(f"📅 Data: {results[0]['date']} {datetime.datetime.now(pytz.timezone('Asia/Jakarta')).strftime('%H:%M')} WIB")
     
     table_block = "\n".join(lines)
     

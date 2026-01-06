@@ -107,7 +107,11 @@ class MarketSessionReporter:
         Generates and sends market reports based on session.
         session_type: 'open', 'mid', 'open2', 'close'
         """
-        logger.info(f"Generating market report: {session_type}")
+        tz_jkt = pytz.timezone('Asia/Jakarta')
+        now = datetime.datetime.now(tz_jkt)
+        time_str = now.strftime('%H:%M')
+        
+        logger.info(f"Generating market report: {session_type} at {time_str}")
         
         # 1. Get Top Movers from Watchlist
         from data_fetcher import get_top_gainers_losers_idx
@@ -116,7 +120,8 @@ class MarketSessionReporter:
         # 2. Construct Message
         if session_type == 'open':
             msg = (
-                "🔔 *MARKET OPENING (SESI 1)* 🔔\n"
+                f"🔔 *MARKET OPENING (SESI 1)* 🔔\n"
+                f"⏰ {time_str} WIB\n"
                 "━━━━━━━━━━━━━━━━━━━━━━\n"
                 "Selamat pagi Traders! Market IHSG telah dibuka.\n"
                 "Pantau volatilitas awal 15 menit pertama.\n\n"
@@ -129,7 +134,8 @@ class MarketSessionReporter:
             # Mid day recap
             top3 = gainers[:3] if gainers else []
             msg = (
-                "🍱 *RECAP SESI 1 (ISHOMA)* 🍱\n"
+                f"🍱 *RECAP SESI 1 (ISHOMA)* 🍱\n"
+                f"⏰ {time_str} WIB\n"
                 "━━━━━━━━━━━━━━━━━━━━━━\n"
                 "Market istirahat. Berikut highlight sesi 1:\n\n"
                 "🚀 *Top Gainers Watchlist*:\n"
@@ -141,7 +147,8 @@ class MarketSessionReporter:
             
         elif session_type == 'open2':
             msg = (
-                "📢 *MARKET SESI 2 DIMULAI* 📢\n"
+                f"📢 *MARKET SESI 2 DIMULAI* 📢\n"
+                f"⏰ {time_str} WIB\n"
                 "━━━━━━━━━━━━━━━━━━━━━━\n"
                 "Sesi perdagangan terakhir hari ini.\n"
                 "Cek apakah ada saham yang *rebound* atau *lanjut naik*.\n\n"
@@ -154,7 +161,8 @@ class MarketSessionReporter:
             top3_l = losers[:3] if losers else []
             
             msg = (
-                "🏁 *MARKET CLOSED (FINAL)* 🏁\n"
+                f"🏁 *MARKET CLOSED (FINAL)* 🏁\n"
+                f"⏰ {time_str} WIB\n"
                 "━━━━━━━━━━━━━━━━━━━━━━\n"
                 "Hari perdagangan berakhir. Simpan energi untuk besok!\n\n"
                 "🚀 *Top Performers*:\n"
