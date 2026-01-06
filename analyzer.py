@@ -325,6 +325,72 @@ def scan_whale_flow(watchlist):
         except Exception:
             continue
             
-    # Sort by Vol Ratio (Highest Abnormal Volume first)
+            
+            # Sort by Vol Ratio (Highest Abnormal Volume first)
     results.sort(key=lambda x: x['vol_ratio'], reverse=True)
     return results
+
+def scan_top_picks(watchlist):
+    """
+    V24 NEXUS WATCHLIST: TOP PICKS FOR TOMORROW
+    Criteria: Strong Uptrend, Healthy RSI, Accumulation Volume.
+    """
+    from data_fetcher import get_historical_data
+    candidates = []
+    
+    for ticker in watchlist:
+        try:
+            # Need ~50 days for MA20/50 and Vol Avg
+            df = get_historical_data(ticker, period="3mo")
+            if df.empty or len(df) < 50: continue
+            
+            last = df.iloc[-1]
+            close = df['Close']
+            
+            # Indicators
+            ma20 = close.rolling(20).mean().iloc[-1]
+            ma50 = close.rolling(50).mean().iloc[-1]
+            rsi = ta.momentum.RSIIndicator(close, window=14).rsi().iloc[-1]
+            
+            avg_vol = df['Volume'].rolling(20).mean().iloc[-1]
+            vol_ratio = last['Volume'] / avg_vol if avg_vol > 0 else 0
+            
+            # FILTERS
+            # 1. Uptrend: Close > MA20 & MA20 > MA50 (Golden Alignment)
+            if not (last['Close'] > ma20 and ma20 > ma50): continue
+            
+            # 2. RSI Healthy (45-70) - Not Oversold, Not Extreme Overbought
+            if not (45 <= rsi <= 75): continue
+            
+            # 3. Volume Check (Liquid & Active)
+            if vol_ratio < 0.8: continue 
+            
+            # SCORING
+            score = 0
+            reasons = []
+            
+            if vol_ratio > 1.2: 
+                score += 20; reasons.append("Accumulation 🐳")
+            if rsi > 55: 
+                score += 10; reasons.append("Strong Momentum ⚡")
+            if last['Close'] > df['High'].iloc[-20:].max(): 
+                score += 30; reasons.append("Breakout 🚀")
+            
+            # Avoid too high pumps
+            change_pct = ((last['Close'] - df.iloc[-2]['Close']) / df.iloc[-2]['Close']) * 100
+            if change_pct > 20: continue # Too risky already pumped
+            
+            candidates.append({
+                "ticker": ticker,
+                "price": last['Close'],
+                "change": change_pct,
+                "score": score,
+                "reasons": ", ".join(reasons) if reasons else "Trend Follow",
+                "vol_ratio": vol_ratio
+            })
+            
+        except Exception: continue
+        
+    # Sort by Score -> Vol Ratio
+    candidates.sort(key=lambda x: (x['score'], x['vol_ratio']), reverse=True)
+    return candidates
