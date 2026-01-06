@@ -249,52 +249,79 @@ def scan_market_screener(watchlist):
 
 def predict_future_price(ticker, days=7):
     """
-    V18 PREDICTION: SCENARIO MAPPING & ACCURACY
+    V22 HARMONY UPDATE: MOMENTUM ANCHORED PREDICTION
+    Fixes the discrepancy where Strong Buy stocks get Bearish predictions due to lag.
     """
     try:
-        # 1. Data Fetch (1 Month Sensitivity)
+        # 1. Data Fetch (Still 1 Month for Sensitivity)
         df = get_historical_data(ticker, period="1mo")
         if df.empty or len(df) < 15:
             return "⚠️ *Prediction Failed*. Data saham tidak cukup."
 
-        # 2. Model Prep
+        # 2. Key Metrics for Anchoring
+        last_close = df['Close'].iloc[-1]
+        
+        # Calculate RSI for Momentum Context
+        try:
+            rsi_series = ta.momentum.RSIIndicator(df['Close'], window=14).rsi()
+            current_rsi = rsi_series.iloc[-1]
+        except:
+            current_rsi = 50 # Default Neutral
+            
+        # 3. Model Prep
         df = df.reset_index()
         df['ordinal_date'] = df['Date'].apply(lambda x: x.toordinal())
         X = df[['ordinal_date']].values
         y = df['Close'].values
         
-        # 3. Train
         model = LinearRegression()
         model.fit(X, y)
         
-        # 4. Metrics
-        score = model.score(X, y) * 100
-        slope = model.coef_[0]
-        
-        # Standard Deviation (Volatility)
-        preds = model.predict(X)
-        residuals = y - preds
-        std_dev = np.std(residuals)
-        
-        # 5. Forecast
-        last_date = df['Date'].iloc[-1]
+        # 4. Forecast
+        last_date = df_raw = df['Date'].iloc[-1]
         future_dates = [last_date + pd.Timedelta(days=i) for i in range(1, days+1)]
         future_ordinal = np.array([d.toordinal() for d in future_dates]).reshape(-1, 1)
         
-        future_main = model.predict(future_ordinal)
+        raw_pred = model.predict(future_ordinal)
+        target_raw = raw_pred[-1]
         
-        # Scenario Mapping
-        # Best Case: Prediction + 1.5 * StdDev
-        # Worst Case: Prediction - 1.5 * StdDev
+        # 5. V22 HARMONY LOGIC: "MOMENTUM ANCHORING"
+        # If Momentum is Bullish (RSI > 55), we shouldn't predict a crash unless structure breaks.
+        # Linear Regression often drags price down to 'mean'.
+        # We weigh the 'Last Price' heavily if momentum is strong.
         
-        target_main = future_main[-1]
+        momentum_weight = 0.0
+        if current_rsi > 60: momentum_weight = 0.7 # High Trust in Current Price
+        elif current_rsi < 40: momentum_weight = 0.7 # High Trust in Current Drop
+        else: momentum_weight = 0.3 # Trust the Mean Reversion more
+        
+        # Final Target = (TrendlineTarget * (1-Weight)) + (LastClose * Weight)
+        # We project the LastClose taking the Slope into account too (Drift)
+        
+        slope = model.coef_[0]
+        drift = slope * days
+        projected_close = last_close + drift
+        
+        # Hybrid Target
+        # If Bullish, bias towards Projected Close (Recent + Slope) rather than Raw Regression Line (Mean)
+        if current_rsi > 55:
+            target_main = max(target_raw, projected_close) # Take the higher path
+        elif current_rsi < 45:
+            target_main = min(target_raw, projected_close) # Take the lower path
+        else:
+            target_main = (target_raw + projected_close) / 2 # Balance
+            
+        # 6. Scenarios (Volatility Based)
+        # Recalculate residuals based on this new target logic? No, keep simple std dev.
+        preds = model.predict(X)
+        std_dev = np.std(y - preds)
+        
         target_best = target_main + (1.5 * std_dev)
         target_worst = target_main - (1.5 * std_dev)
         
-        current_price = y[-1]
-        pot_main = ((target_main - current_price) / current_price) * 100
+        # 7. Formatting
+        pot_main = ((target_main - last_close) / last_close) * 100
         
-        # 6. Conclusion Gen
         if slope > 0:
             trend = "📈 UPTREND"
             bias = "Bias Bullish"
@@ -302,7 +329,14 @@ def predict_future_price(ticker, days=7):
             trend = "📉 DOWNTREND"
             bias = "Bias Bearish"
             
-        prob = score if score < 95 else 95 # Cap probability
+        # Override Trend Label if RSI contradicts Slope
+        if slope < 0 and current_rsi > 60:
+            bias = "Reversal Bullish (Strong Momentum)"
+        elif slope > 0 and current_rsi < 40:
+            bias = "Reversal Bearish (Weak Momentum)"
+            
+        score = model.score(X, y) * 100
+        prob = score if score < 95 else 95
         
         msg = (
             f"🔮 *NEXUS PROJECTION AI: {ticker}*\n"
@@ -318,12 +352,11 @@ def predict_future_price(ticker, days=7):
             f"🔴 *Worst Case*  : Rp {target_worst:,.0f} (Pessimis)\n\n"
             f"⚙️ *MODEL INSIGHTS*:\n"
             f"• Volatility   : ±Rp {std_dev:,.0f}/hari\n"
-            f"• Momentum     : {'Kuat' if abs(slope) > 10 else 'Sedang' if abs(slope) > 5 else 'Lemah'}\n"
+            f"• RSI Impact   : {current_rsi:.1f} (Weighted)\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"🤖 *AI CONCLUSION*:\n"
-            f"\"Model memproyeksikan pergerakan {bias.lower()} dengan volatilitas Rp {std_dev:,.0f}. "
-            f"Jika market mendukung, harga bisa menyentuh Best Case di {target_best:,.0f}. "
-            f"Waspadai jika breakdown di bawah Worst Case {target_worst:,.0f}.\""
+            f"\"Model V22 mengintegrasikan momentum RSI. Target disesuaikan dengan {'tekanan beli' if current_rsi > 50 else 'tekanan jual'} saat ini, "
+            f"mengurangi bias regresi linear. Potensi arah {bias.lower()}.\""
         )
         
         return msg
