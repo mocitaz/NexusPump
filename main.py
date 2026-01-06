@@ -72,35 +72,65 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(help_text, parse_mode='Markdown')
 
 async def screener(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🕵️‍♂️ *Running Market Screener...*\n_Memproses indikator Bandar & Volatilitas..._", parse_mode='Markdown')
+    msg_processing = await update.message.reply_text("🕵️‍♂️ *Menganalisis Market... (Mohon tunggu)*", parse_mode='Markdown')
     
     results = scan_market_screener(IDX_WATCHLIST)
     if not results:
-        await update.message.reply_text("❌ Tidak ada data yang tersedia/Pasar tutup.")
+        await msg_processing.edit_text("❌ *Market Screener*: Data tidak tersedia atau pasar tutup.", parse_mode='Markdown')
         return
         
-    # Create Table
-    msg = "📟 *NEXUS MARKET SCREENER* 📟\n"
-    msg += f"📅 Data: {results[0]['date']}\n"
-    msg += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-    msg += "`Kode  | Harga  | Potensi | Bandar | Safety`\n"
-    msg += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    # Create Neat Table
+    # Max width handling for Telegram Mobile
+    # Code: 4 chars, Price: 5 chars (9.9K), Pot: 4 chars (+9%), Sts: 2 chars
     
-    # Show Top 15
+    header = "ROKET  HARGA  POT%  STS"
+    lines = []
+    lines.append(header)
+    lines.append("-" * 25)
+    
     for r in results[:15]:
-        # Truncate for formatting
-        ticker = f"{r['ticker']:<5}"
-        price = f"{r['price']:<6,.0f}"
-        pot = f"+{r['potential']:<4.1f}%"
-        bandar = "🐳" if "AKUM" in r['bandar'] else "🔻" if "DIST" in r['bandar'] else "➖"
-        safe = "✅" if "AMAN" in r['bsjp'] else "⚠️"
+        ticker = r['ticker'][:4]
         
-        msg += f"`{ticker} {price} {pot}  {bandar}    {safe}`\n"
+        # Format Price (K for thousands to save space)
+        p_val = r['price']
+        if p_val >= 1000:
+            p_str = f"{p_val/1000:.1f}K"
+        else:
+            p_str = f"{p_val:.0f}"
+            
+        pot_val = r['potential']
+        pot_str = f"{pot_val:+.0f}%"
         
-    msg += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-    msg += "_Ket: Potensi (Jarak ke R1), Bandar (Vol Flow), Safety (Volatilitas)_"
+        # Status Icons
+        # Bandar: 🐳(Akum),🔻(Dist), ➖(Normal)
+        # Safety: ✅(Aman), ⚠️(Risk)
+        bandar_icon = "🐳" if "AKUM" in r['bandar'] else "🔻" if "DIST" in r['bandar'] else "➖"
+        safety_icon = "✅" if "AMAN" in r['bsjp'] else "⚠️"
+        status = f"{bandar_icon}{safety_icon}"
+        
+        # Rigid alignment:
+        # Ticker: 5 chars left
+        # Price: 6 chars right
+        # Pot: 5 chars right
+        # Sts: 5 chars center/right
+        line = f"{ticker:<5} {p_str:>6} {pot_str:>5}  {status}"
+        lines.append(line)
+        
+    lines.append("-" * 25)
+    lines.append(f"📅 Data: {results[0]['date']}")
     
-    await update.message.reply_text(msg, parse_mode='Markdown')
+    table_block = "\n".join(lines)
+    
+    final_msg = (
+        "📟 *NEXUS SCREENER PRO*\n"
+        f"```\n{table_block}\n```\n"
+        "📖 *Legenda*:\n"
+        "• `STS`: Status (Bandar 🐳/🔻 + Safety ✅/⚠️)\n"
+        "• `POT%`: Upside ke Resistance terdekat.\n"
+        "_Update Sesi Ini_"
+    )
+    
+    await msg_processing.edit_text(final_msg, parse_mode='Markdown')
 
 async def harga(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
@@ -127,23 +157,24 @@ async def harga(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         msg = (
             f"🏢 *{data['long_name']} ({data['ticker']})*\n"
-            f"Kategori: _{data['sector']}_\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"💰 *Harga*: Rp {data['price']:,.0f}\n"
-            f"{emoji} *Perubahan*: {data['change']:+,.0f} ({data['change_pct']:.2f}%)\n"
-            f"📊 *Status*: {color_indicator}\n\n"
-            f"📉 *Rentang Harian*:\n"
-            f"Low: {data['low']:,.0f} — High: {data['high']:,.0f}\n\n"
-            f"📦 *Statistik Kunci*:\n"
-            f"• Vol: {data['volume']:,.0f}\n"
+            f"🏷 _{data['sector']}_\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💵 *IDR {data['price']:,.0f}*   {color_indicator}\n"
+            f"{emoji} *{data['change']:+,.0f} ({data['change_pct']:.2f}%)*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📊 *Statistik Hari Ini*:\n"
+            f"• Vol  : {data['volume']:,.0f}\n"
+            f"• Low  : {data['low']:,.0f}\n"
+            f"• High : {data['high']:,.0f}\n\n"
+            f"💎 *Valuasi*:\n"
             f"• M.Cap: Rp {mcap_str}\n"
-            f"• PE Ratio: {data['pe_ratio'] if data['pe_ratio'] else '-'}\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"ℹ️ _Ketik /analisa {ticker} untuk sinyal beli/jual._"
+            f"• PE Ratio: {data['pe_ratio'] if data['pe_ratio'] else 'N/A'}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💡 _Analisis Teknikal? Ketik_ `/analisa {ticker}`"
         )
         await waiting_msg.edit_text(msg, parse_mode='Markdown')
     else:
-        await waiting_msg.edit_text(f"❌ Data *{ticker}* tidak ditemukan atau simbol salah.", parse_mode='Markdown')
+        await waiting_msg.edit_text(f"❓ *Data tidak ditemukan*.\nPastikan kode saham benar (misal: BBCA, ANTM).", parse_mode='Markdown')
 
 async def chart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
