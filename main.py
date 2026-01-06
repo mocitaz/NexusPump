@@ -295,10 +295,10 @@ async def sectors(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         data = await asyncio.wait_for(
             asyncio.to_thread(scan_sector_performance),
-            timeout=25.0
+            timeout=60.0
         )
     except asyncio.TimeoutError:
-        await waiting.edit_text("⚠️ *Timeout*. Server sibuk.")
+        await waiting.edit_text("⚠️ *Timeout*. Server sibuk (Data Sector berat).")
         return
     except Exception as e:
         logger.error(f"Sectors error: {e}")

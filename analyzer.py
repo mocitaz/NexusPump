@@ -427,8 +427,9 @@ def scan_sector_performance():
     
     tickers_idx = [t + ".JK" for t in IDX_WATCHLIST]
     try:
-        # Batch Fetch 5d
-        df = yf.download(tickers_idx, period="5d", interval="1d", group_by='column', progress=False, threads=False, actions=False)
+        # Batch Fetch 2d is enough for calculating change (Previous Close vs Last Close)
+        # Optimized for speed.
+        df = yf.download(tickers_idx, period="2d", interval="1d", group_by='column', progress=False, threads=False, actions=False)
         if df.empty: return []
         
         sector_perf = []
