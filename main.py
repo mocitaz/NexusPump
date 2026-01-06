@@ -706,9 +706,18 @@ async def screener(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def bsjp(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target_msg = update.message if update.message else update.callback_query.message
-    waiting = await target_msg.reply_text("🦅 *NEXUS SNIPER: Scanning Targets...*", parse_mode='Markdown')
+    waiting = await target_msg.reply_text("🦅 *NEXUS SNIPER: Scanning & Backtesting...*", parse_mode='Markdown')
     
-    candidates = await asyncio.to_thread(scan_bsjp_strategy, IDX_WATCHLIST)
+    # Increase timeout for Backtest (45 stocks * fetch)
+    try:
+        candidates = await asyncio.wait_for(
+            asyncio.to_thread(scan_bsjp_strategy, IDX_WATCHLIST),
+            timeout=120.0
+        )
+    except asyncio.TimeoutError:
+         await waiting.edit_text("⚠️ *Timeout*. Market Scan terlalu lama. Coba lagi nanti.")
+         return
+         
     time_str = datetime.datetime.now(pytz.timezone('Asia/Jakarta')).strftime('%H:%M')
     
     if not candidates:
@@ -718,15 +727,25 @@ async def bsjp(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = f"🦅 *NEXUS SNIPER PRO (BSJP)*\n⏰ Pukul: {time_str} WIB\n━━━━━━━━━━━━━━━━━━━━━━\n"
     for c in candidates[:10]: 
         # Visualization of Win Prob
-        win_prob = c.get('win_prob', 60)
-        icon = "🎯" if win_prob > 80 else "🔫"
+        win_prob = c.get('win_prob', 0)
+        trades = c.get('trades', 0)
+        avg_gain = c.get('avg_gain', 0)
+        vol_ratio = c.get('vol_ratio', 0)
         
+        icon = "🎯" if win_prob >= 75 else "🎲"
+        
+        # Format Backtest Stats
+        if trades > 0:
+            stats_str = f"Win Rate: *{win_prob:.1f}%* ({trades} Trades)"
+        else:
+            stats_str = "Win Rate: *Unknown* (Not enough data)"
+            
         msg += (
             f"{icon} *{c['ticker']}* @ {c['price']:,.0f}\n"
-            f"   📈 Gain: +{c['change']:.1f}% | 🎲 Win Prob: ~{win_prob}%\n"
-            f"   🔊 Vol: {c['volume_ratio']:.1f}x Avg\n\n"
+            f"   📈 Gain: +{c['change']:.1f}% | 🎲 {stats_str}\n"
+            f"   🔊 Vol Ratio: {vol_ratio:.1f}x | Avg Scalp: +{avg_gain:.1f}%\n\n"
         )
-    msg += "━━━━━━━━━━━━━━━━━━━━━━\n⚠️ _High Risk Scalping Strategy._"
+    msg += "━━━━━━━━━━━━━━━━━━━━━━\n⚠️ _Win Rate based on 6 Months Backtest._"
     await waiting.edit_text(msg, parse_mode='Markdown')
 
 async def picks(update: Update, context: ContextTypes.DEFAULT_TYPE):

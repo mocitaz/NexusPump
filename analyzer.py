@@ -135,10 +135,11 @@ def analyze_stock(ticker):
 
 def scan_bsjp_strategy(watchlist):
     """
-    V23 NEXUS SNIPER: BSJP PRO
-    Adds Win Probability Calculation.
+    V30 NEXUS SNIPER: BSJP PRO
+    Uses Real Backtest Data for Win Rate.
     """
     from data_fetcher import get_historical_data
+    from backtester import calculate_bsjp_winrate
     candidates = []
     
     for ticker in watchlist:
@@ -154,18 +155,30 @@ def scan_bsjp_strategy(watchlist):
             vol_ratio = last['Volume'] / avg_vol
             
             if 2.0 <= change <= 15.0 and last['Close'] > df['Close'].rolling(20).mean().iloc[-1] and vol_ratio > 1.2:
-                # Calculate "Win Probability" based on trend
-                win_prob = 60
-                if last['Close'] > df['Close'].rolling(50).mean().iloc[-1]: win_prob += 10
-                if vol_ratio > 2.0: win_prob += 10
-                if change < 5.0: win_prob += 5 # Safe entry
+                # Calculate REAL Win Rate via Backtest
+                bt = calculate_bsjp_winrate(ticker, period="6mo")
+                
+                win_prob = 0
+                trade_count = 0
+                avg_gain = 0
+                
+                if bt:
+                    win_prob = bt['win_rate']
+                    trade_count = bt['trades']
+                    avg_gain = bt['avg_gain']
+                else:
+                    # Fallback Heuristic
+                    win_prob = 60
+                    if last['Close'] > df['Close'].rolling(50).mean().iloc[-1]: win_prob += 10
                 
                 candidates.append({
                     "ticker": ticker,
                     "price": last['Close'],
                     "change": change,
                     "vol_ratio": vol_ratio,
-                    "win_prob": min(win_prob, 95)
+                    "win_prob": win_prob,
+                    "trades": trade_count,
+                    "avg_gain": avg_gain
                 })
         except Exception: continue
         
