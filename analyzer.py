@@ -394,3 +394,87 @@ def scan_top_picks(watchlist):
     # Sort by Score -> Vol Ratio
     candidates.sort(key=lambda x: (x['score'], x['vol_ratio']), reverse=True)
     return candidates
+
+def scan_sector_performance():
+    """
+    V26 NEXUS SECTOR RADAR: Rotational Analysis
+    Calculates average performance of each sector based on available data.
+    """
+    from idx_tickers import SECTOR_MAP
+    from data_fetcher import get_top_gainers_losers_idx
+    
+    # Reuse the batch fetcher (Efficient)
+    # This returns tuple (gainers, losers), so we combine them or fetch raw
+    # Actually get_top_gainers_losers_idx fetches ALL and splits. 
+    # Let's modify logic: The function separates them. 
+    # We can just fetch them and combine, or better, make a new lightweight fetcher?
+    # No, reuse is best to keep code DRY. `get_top_gainers_losers_idx` logic:
+    # It sorts and cuts. We want ALL. 
+    # Ah, the function `get_top_gainers_losers_idx` in data_fetcher returns ONLY top 10.
+    # We need the RAW list.
+    # Let's import the RAW fetching logic or create a helper in data_fetcher?
+    # For now, I will create a focused fetcher here or use `get_stock_price` in loop? 
+    # Loop is slow.
+    # Better: Use `get_top_gainers_losers_idx` but I might need to edit data_fetcher to return all?
+    # Let's checking data_fetcher again.
+    
+    # Re-reading data_fetcher shows it sorts and returns [:10]. 
+    # I should add `get_all_market_data` in data_fetcher.py ideally.
+    # But to avoid editing too many files, I will Implement a local batch fetch here similar to that one.
+    
+    import yfinance as yf
+    from idx_tickers import IDX_WATCHLIST
+    
+    tickers_idx = [t + ".JK" for t in IDX_WATCHLIST]
+    try:
+        # Batch Fetch 5d
+        df = yf.download(tickers_idx, period="5d", interval="1d", group_by='column', progress=False, threads=False, actions=False)
+        if df.empty: return []
+        
+        sector_perf = []
+        
+        for sector, tickers in SECTOR_MAP.items():
+            total_change = 0
+            count = 0
+            top_ticker = None
+            top_change = -999
+            
+            for t in tickers:
+                t_jk = t + ".JK"
+                if t_jk not in df.columns.levels[0]: continue # Skip if no data
+                
+                try:
+                    # Get Close
+                    closes = df[t_jk]['Close'].dropna()
+                    if len(closes) < 2: continue
+                    
+                    last = closes.iloc[-1]
+                    prev = closes.iloc[-2]
+                    change = ((last - prev) / prev) * 100
+                    
+                    total_change += change
+                    count += 1
+                    
+                    if change > top_change:
+                        top_change = change
+                        top_ticker = t
+                except: continue
+            
+            if count > 0:
+                avg_change = total_change / count
+                stats = "🔥" if avg_change > 1.0 else "❄️" if avg_change < -0.5 else "➡️"
+                sector_perf.append({
+                    "sector": sector,
+                    "avg_change": avg_change,
+                    "top_stock": top_ticker,
+                    "top_change": top_change,
+                    "stats": stats
+                })
+        
+        # Sort by Performance
+        sector_perf.sort(key=lambda x: x['avg_change'], reverse=True)
+        return sector_perf
+        
+    except Exception as e:
+        logger.error(f"Sector Scan Error: {e}")
+        return []

@@ -60,6 +60,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• `/pulse`    : Cek 'Detak Jantung' Market (Fear vs Greed).\n"
         "• `/flow`     : Radar 'Bandar Flow' & Whale Accumulation.\n"
         "• `/screener` : Scanner Saham Potensial (Top Picks).\n"
+        "• `/sectors`  : Peta Rotasi Sektor (Flow of Funds). 🆕\n"
         "• `/picks`    : Top 5 Saham Pilihan Besok (Prime Watchlist).\n\n"
         "🧠 *DEEP INTELLIGENCE*\n"
         "• `/analisa <kode>` : AI Professional Analysis (Multi-Timeframe).\n"
@@ -486,6 +487,47 @@ async def picks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     
     msg += "━━━━━━━━━━━━━━━━━━━━━━\n💡 _Top 5 Saham Uptrend + Akumulasi untuk dipantau besok._"
+    await waiting.edit_text(msg, parse_mode='Markdown')
+
+async def sectors(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    target_msg = update.message if update.message else update.callback_query.message
+    waiting = await target_msg.reply_text("🗺️ *Scanning Sector Map...*", parse_mode='Markdown')
+
+    try:
+        data = await asyncio.wait_for(
+            asyncio.to_thread(scan_sector_performance),
+            timeout=25.0
+        )
+    except asyncio.TimeoutError:
+        await waiting.edit_text("⚠️ *Timeout*. Server sibuk.")
+        return
+    except Exception as e:
+        logger.error(f"Sectors error: {e}")
+        await waiting.edit_text("❌ Gagal scan sektor.")
+        return
+        
+    if not data:
+        await waiting.edit_text("❌ Data Sektor tidak tersedia.")
+        return
+        
+    time_str = datetime.datetime.now(pytz.timezone('Asia/Jakarta')).strftime('%H:%M')
+    msg = f"🗺️ *NEXUS SECTOR RADAR*\n⏰ {time_str} WIB\n━━━━━━━━━━━━━━━━━━━━━━\n"
+    
+    for d in data:
+        sector_name = d['sector']
+        avg = d['avg_change']
+        stats = d['stats']
+        top = d['top_stock']
+        top_chg = d['top_change']
+        
+        # Formatting
+        # Energy  🔥 +1.2% | ADRO +3%
+        msg += (
+            f"{stats} *{sector_name}* ({avg:+.1f}%)\n"
+            f"   🏆 Lead: {top} ({top_chg:+.1f}%)\n\n"
+        )
+        
+    msg += "━━━━━━━━━━━━━━━━━━━━━━\n💡 _Rotasi sektor menunjukkan arus uang Smart Money._"
     await waiting.edit_text(msg, parse_mode='Markdown')
 
 # --- Background Tasks ---

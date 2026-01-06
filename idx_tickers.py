@@ -35,6 +35,17 @@ IDX_WATCHLIST = [
     "CPIN", "JPFA", "TAPG", "DSNG", "LSIP", "AALI"
 ]
 
-# Helper to get full ticker format
 def get_all_tickers():
     return [f"{t}.JK" for t in IDX_WATCHLIST]
+
+# V26: Sector Mapping
+SECTOR_MAP = {
+    "FINANCE": ["BBCA", "BBRI", "BMRI", "BBNI", "BRIS", "BBTN", "BDMN", "BNGA"],
+    "TECHNOLOGY": ["GOTO", "EMTK", "SCMA", "BUKA", "MTDL"],
+    "INFRA & TELCO": ["TLKM", "ISAT", "EXCL", "JSMR", "PGAS"],
+    "ENERGY": ["ADRO", "PTBA", "ITMG", "HRUM", "INDY", "BUMI", "ADMR", "AKRA", "MEDC"],
+    "BASIC MAT": ["ANTM", "INCO", "MDKA", "MBMA", "TINS", "PSAB", "NCKL", "INKP", "TKIM", "BRPT", "TPIA", "ESSA"],
+    "CONSUMER": ["ICBP", "INDF", "UNVR", "MYOR", "AMRT", "MAPI", "ACES", "KLBF", "SIDO", "CPIN", "JPFA"],
+    "PROPERTY": ["BSDE", "CTRA", "PWON", "SMRA", "ASRI"],
+    "AUTO & IND": ["ASII", "AUTO", "IMAS", "SMGR", "INTP", "UNTR"]
+}
