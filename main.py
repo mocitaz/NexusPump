@@ -262,12 +262,55 @@ async def session_close(context: ContextTypes.DEFAULT_TYPE):
     reporter = MarketSessionReporter(context.application)
     await reporter.send_report(context, 'close')
 
+async def channel_command_dispatcher(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Manually handles commands sent in CHANNELS (Update.channel_post).
+    Standard CommandHandler ignores channel posts, so we need this.
+    """
+    if not update.channel_post or not update.channel_post.text:
+        return
+        
+    text = update.channel_post.text
+    if not text.startswith('/'):
+        return
+        
+    parts = text.split()
+    command = parts[0].lower().split('@')[0].replace('/', '') # clean /start@BotName -> start
+    args = parts[1:]
+    
+    # Inject args into context for compatibility with existing string handlers
+    context.args = args
+    
+    # Route to functions
+    if command == 'start':
+        await start(update, context)
+    elif command == 'harga':
+        await harga(update, context)
+    elif command == 'chart':
+        await chart(update, context)
+    elif command == 'analisa':
+        await analisa(update, context)
+    elif command == 'news':
+        await news(update, context)
+    elif command == 'predict':
+        await predict(update, context)
+    elif command == 'screener':
+        await screener(update, context)
+    elif command == 'bsjp':
+        await bsjp(update, context)
+    elif command == 'gainers':
+        await gainers(update, context)
+    elif command == 'losers':
+        await losers(update, context)
+    # else: ignore unknown commands
+
 if __name__ == '__main__':
     if TOKEN == "YOUR_TELEGRAM_BOT_TOKEN":
         print("Set ENV 'TELEGRAM_BOT_TOKEN' first!")
         
     application = ApplicationBuilder().token(TOKEN).build()
     
+    # Standard Handlers (Private & Group)
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler('harga', harga))
     application.add_handler(CommandHandler('chart', chart))
@@ -278,6 +321,14 @@ if __name__ == '__main__':
     application.add_handler(CommandHandler('gainers', gainers))
     application.add_handler(CommandHandler('losers', losers))
     application.add_handler(CommandHandler('screener', screener))
+    
+    # SPECIAL HANDLER FOR CHANNELS
+    # Listen to text in Channels that looks like a command
+    from telegram.ext import filters, MessageHandler
+    channel_filter = filters.ChatType.CHANNEL & filters.Regex(r'^/')
+    application.add_handler(MessageHandler(channel_filter, channel_command_dispatcher))
+    
+    # Setup JobQueue for background alerts
     
     # Setup JobQueue for background alerts
     job_queue = application.job_queue
