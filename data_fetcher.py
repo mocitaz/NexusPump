@@ -1,6 +1,7 @@
 import yfinance as yf
 import pandas as pd
 import logging
+import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +66,7 @@ def get_stock_price(ticker, detailed=False):
             high = info.day_high if info.day_high else last_price
             low = info.day_low if info.day_low else last_price
             volume = info.last_volume
+            last_updated_str = "End of Day"
 
         return {
             "ticker": ticker.upper(),
@@ -98,6 +100,37 @@ def get_historical_data(ticker, period="1mo", interval="1d"):
     except Exception as e:
         logger.error(f"Error fetching history for {ticker}: {e}")
         return pd.DataFrame()
+
+def get_stock_news(ticker):
+    """
+    Fetches latest news for the stock using yfinance.
+    Returns list of dicts: title, link, publisher, published.
+    """
+    try:
+        if not ticker.endswith(".JK") and not ticker.endswith(".jk"):
+            ticker = f"{ticker}.JK"
+            
+        stock = yf.Ticker(ticker)
+        news_items = stock.news
+        
+        results = []
+        for item in news_items:
+            # Calculate readable time
+            ts = item.get('providerPublishTime', 0)
+            dt = datetime.datetime.fromtimestamp(ts)
+            time_str = dt.strftime('%d %b %H:%M')
+            
+            results.append({
+                'title': item.get('title', 'No Title'),
+                'link': item.get('link', '#'),
+                'source': item.get('publisher', 'Unknown'),
+                'published': time_str
+            })
+            
+        return results
+    except Exception as e:
+        logger.error(f"Error fetching news for {ticker}: {e}")
+        return []
 
 from idx_tickers import IDX_WATCHLIST
 
