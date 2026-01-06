@@ -266,47 +266,49 @@ async def harga(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     ticker = context.args[0].upper()
-    waiting_msg = await update.message.reply_text(f"🔄 Sedang mengambil data LIVE *{ticker}*...", parse_mode='Markdown')
+    waiting_msg = await update.message.reply_text(f"🔄 *Fetching Live Data {ticker}...* (Wait)", parse_mode='Markdown')
     
     # Enable Detailed Mode for 1m interval timestamp
     data = get_stock_price(ticker, detailed=True)
     
     if data:
-        emoji = "💹" if data['change'] >= 0 else "🔻"
-        color_indicator = "🟢 Bullish" if data['change'] >= 0 else "🔴 Bearish"
+        emoji = "🚀" if data['change'] >= 0 else "🔻"
+        color_indicator = "🟢 BULLISH" if data['change'] >= 0 else "🔴 BEARISH"
         
         # Format Market Cap
-        # Note: We need to fetch mcap separately if get_stock_price doesn't return it
-        # Actually get_stock_price logic we just wrote removed the mcap key...
-        # Wait, I missed copying mcap logic in the previous tool use? 
-        # Checking data_fetcher.py... 
-        # Ah, I replaced the whole function but I didn't see `mcap` in my replacement.
-        # I need to FIX data_fetcher.py first because I might have deleted market cap logic implicitly 
-        # OR I should rely on fetching it here. 
-        # Actually, get_stock_price in previous version didn't return mcap in the dictionary explicitly in line 45-52 
-        # BUT the /harga handler was using data['market_cap'] in line 150.
-        # This implies `data_fetcher.py` had `data['market_cap']` populated previously?
-        # Let's check `data_fetcher` content history.
-        # Looking at previous view_file of data_fetcher.py (Step 529):
-        # Line 45-52 return dict keys: ticker, price, change, change_pct, high, low, volume.
-        # IT DID NOT RETURN market_cap! 
-        # So where did line 150 `mcap = data['market_cap']` come from in main.py?
-        # Maybe I missed it in the `data_fetcher` view, or it was added in V3 but I overwrote it?
-        # Actually, in Step 370 view (truncated), I saw `get_stock_price` was enhanced for fundamentals.
-        # But in Step 529 view, I DO NOT SEE `market_cap` in the return dict.
-        # This means `data_fetcher.py` I just edited might have been missing it, or the view was incomplete?
-        # No, the view showed lines 1-100 and function end.
+        mcap = data.get('market_cap', 0)
+        if mcap >= 1_000_000_000_000:
+            mcap_str = f"{mcap/1_000_000_000_000:.2f} T"
+        elif mcap >= 1_000_000_000:
+            mcap_str = f"{mcap/1_000_000_000:.0f} M"
+        else:
+            mcap_str = f"{mcap:,.0f}"
+
+        # Live Timestamp
+        last_upd = data.get('last_updated', 'N/A')
         
-        # CRITICAL: I probably broke Market Cap in V10 if I didn't include it. 
-        # I must fix `data_fetcher.py` to retrieve market cap again.
-        
-        # Since I can't check previous versions easily, I will re-implement Market Cap fetching in `data_fetcher.py`.
-        # I will pause this Edit on main.py and Fix data_fetcher first.
-        
-        pass 
-        
+        # Ultimate Professional Card
+        msg = (
+            f"🏢 *{data.get('long_name', ticker)}* ({data['ticker']})\n"
+            f"🏷 _{data.get('sector', 'Unknown')}_\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💵 *IDR {data['price']:,.0f}*   {color_indicator}\n"
+            f"{emoji} *{data['change']:+,.0f} ({data['change_pct']:.2f}%)*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📊 *STATISTIK LIVE*:\n"
+            f"• Vol     : {data['volume']:,.0f}\n"
+            f"• Range   : {data['low']:,.0f} - {data['high']:,.0f}\n"
+            f"• Updated : {last_upd} WIB ⏰\n\n"
+            f"💎 *FUNDAMENTAL*:\n"
+            f"• M.Cap   : Rp {mcap_str}\n"
+            f"• PER     : {data.get('pe_ratio', 'N/A') if data.get('pe_ratio') else 'N/A'}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💡 _Analisis Lanjut?_ `/analisa {ticker}`\n"
+            f"📈 _Lihat Chart?_ `/chart {ticker}`"
+        )
+        await waiting_msg.edit_text(msg, parse_mode='Markdown')
     else:
-        pass
+        await waiting_msg.edit_text(f"❓ *Data tidak ditemukan*.\nPastikan kode saham benar (misal: BBCA, ANTM).", parse_mode='Markdown')
 
 async def chart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
