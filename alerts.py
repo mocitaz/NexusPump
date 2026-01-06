@@ -1,6 +1,7 @@
 import pandas as pd
 import datetime
 import logging
+import pytz
 from data_fetcher import get_stock_price
 
 from idx_tickers import IDX_WATCHLIST
