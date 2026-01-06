@@ -9,153 +9,172 @@ logger = logging.getLogger(__name__)
 
 def analyze_stock(ticker):
     """
-    Performs technical analysis on the stock: RSI, MACD, Bollinger Bands.
-    Returns a summary string and signal.
+    V16 DEEP INTELLIGENCE ANALYSIS.
+    Multi-Timeframe Moving Averages, Volume Dynamics, and Narrative Engineering.
     """
     try:
-        # Need enough data for technical indicators (at least 2-3 months)
-        df = get_historical_data(ticker, period="6mo")
+        # 1. Fetch Data (Need at least 200 days for MA200 if possible, but 6mo is ~120 days)
+        # Let's try 1y for comprehensive analysis
+        df = get_historical_data(ticker, period="1y")
         if df.empty:
-            return "Data saham tidak ditemukan.", "NEUTRAL"
+            return "🔍 *Data tidak ditemukan*. Pastikan kode saham benar.", "NEUTRAL"
         
-        # Ensure we have enough data points
+        # Ensure sufficient data
         if len(df) < 50:
-            return "Data tidak cukup untuk analisis teknikal.", "NEUTRAL"
+            return "⚠️ *Data tidak cukup* (Min 50 hari untuk analisa akurat).", "NEUTRAL"
 
-        # --- Indicators ---
-        # RSI (14)
-        df['rsi'] = ta.momentum.RSIIndicator(df['Close'], window=14).rsi()
+        # 2. Key Indicators Calculation
+        close = df['Close']
+        volume = df['Volume']
         
-        # MACD
-        macd = ta.trend.MACD(df['Close'])
-        df['macd'] = macd.macd()
-        df['macd_signal'] = macd.macd_signal()
+        # Moving Averages
+        df['MA20'] = close.rolling(20).mean()
+        df['MA50'] = close.rolling(50).mean()
+        df['MA200'] = close.rolling(200).mean()
+        
+        # RSI & MACD
+        df['RSI'] = ta.momentum.RSIIndicator(close, window=14).rsi()
+        macd = ta.trend.MACD(close)
+        df['MACD'] = macd.macd()
+        df['MACD_Signal'] = macd.macd_signal()
+        df['MACD_Hist'] = macd.macd_diff()
         
         # Bollinger Bands
-        bb = ta.volatility.BollingerBands(df['Close'], window=20, window_dev=2)
-        df['bb_high'] = bb.bollinger_hband()
-        df['bb_low'] = bb.bollinger_lband()
+        bb = ta.volatility.BollingerBands(close, window=20, window_dev=2)
+        df['BB_High'] = bb.bollinger_hband()
+        df['BB_Low'] = bb.bollinger_lband()
         
-        # --- Pivot Points (Classic) ---
-        # Based on yesterday's data
-        last_complete_candle = df.iloc[-2] # Assuming -1 is current live candle (incomplete)
-        high = last_complete_candle['High']
-        low = last_complete_candle['Low']
-        close = last_complete_candle['Close']
+        # Stochastic Oscillator (Fast)
+        stoch = ta.momentum.StochasticOscillator(df['High'], df['Low'], close, window=14, smooth_window=3)
+        df['Stoch_K'] = stoch.stoch()
+        df['Stoch_D'] = stoch.stoch_signal()
         
-        pivot = (high + low + close) / 3
-        r1 = (2 * pivot) - low
-        s1 = (2 * pivot) - high
-        r2 = pivot + (high - low)
-        s2 = pivot - (high - low)
+        # Volume Analysis
+        df['Vol_MA20'] = volume.rolling(20).mean()
         
-        last_row = df.iloc[-1]
-        prev_row = df.iloc[-2]
-        current_price = last_row['Close']
-        rsi_val = last_row['rsi']
+        # --- Current State ---
+        last = df.iloc[-1]
+        prev = df.iloc[-2]
         
-        # --- Pattern Recognition (Simple) ---
-        patterns = []
+        price = last['Close']
         
-        # Doji: Open and Close are very close
-        body_size = abs(last_row['Close'] - last_row['Open'])
-        full_range = last_row['High'] - last_row['Low']
-        if full_range > 0 and (body_size / full_range) < 0.1:
-            patterns.append("Doji (Ketidakpastian)")
-            
-        # Hammer: Small body at top, long lower wick
-        lower_wick = min(last_row['Open'], last_row['Close']) - last_row['Low']
-        upper_wick = last_row['High'] - max(last_row['Open'], last_row['Close'])
-        if full_range > 0 and lower_wick > (2 * body_size) and upper_wick < body_size:
-            patterns.append("Hammer (Potensi Reversal Bullish)")
-            
-        # Bullish Engulfing
-        prev_body = prev_row['Close'] - prev_row['Open']
-        curr_body = last_row['Close'] - last_row['Open']
-        if prev_body < 0 and curr_body > 0 and last_row['Close'] > prev_row['Open'] and last_row['Open'] < prev_row['Close']:
-             patterns.append("Bullish Engulfing (Kuat Bullish)")
-
-        # --- Signals & Scoring ---
-        signals = []
-        score = 50 # Neutral 50
+        # 3. Comprehensive Logic Scoring
+        score = 50
+        factors = []
         
-        # RSI Analysis
-        if rsi_val > 70:
-            signals.append("RSI Overbought (>70)")
-            score -= 20
-        elif rsi_val < 30:
-            signals.append("RSI Oversold (<30)")
-            score += 20
-        elif 45 <= rsi_val <= 55:
-            score += 0 # Neutral
-        elif rsi_val > 55:
-            score += 5 # Slight Bullish
+        # Trend Analysis (Weight: 40%)
+        # Long Term
+        if pd.notna(last['MA200']):
+            if price > last['MA200']: 
+                score += 10
+                factors.append("Above MA200 (Long Uptrend)")
+            else: 
+                score -= 10
+        
+        # Medium Term
+        if pd.notna(last['MA50']):
+            if price > last['MA50']:
+                score += 10
+                factors.append("Above MA50 (Medium Bullish)")
+            else:
+                score -= 10
+                
+        # Short Term & Momentum (Weight: 30%)
+        if price > last['MA20']:
+            score += 5
         else:
-            score -= 5 # Slight Bearish
+            score -= 5
             
         # MACD
-        if (prev_row['macd'] < prev_row['macd_signal']) and (last_row['macd'] > last_row['macd_signal']):
-            signals.append("MACD Golden Cross")
-            score += 30
-        elif (prev_row['macd'] > prev_row['macd_signal']) and (last_row['macd'] < last_row['macd_signal']):
-            signals.append("MACD Death Cross")
-            score -= 30
-        elif last_row['macd'] > last_row['macd_signal']:
-            score += 10 # Bullish Trend
-        else:
-            score -= 10 # Bearish Trend
-            
-        # Support/Resistance Check
-        dist_r1 = abs(current_price - r1) / current_price
-        dist_s1 = abs(current_price - s1) / current_price
+        if last['MACD'] > last['MACD_Signal']:
+            score += 10
+            factors.append("MACD Bullish")
         
-        if dist_r1 < 0.01:
-            signals.append("Dekat Resistance R1")
-        if dist_s1 < 0.01:
-            signals.append("Dekat Support S1")
-            
-        # Bollinger
-        if current_price >= last_row['bb_high']:
-            signals.append("Break Upper BB")
-        elif current_price <= last_row['bb_low']:
-            signals.append("Break Lower BB")
-
-        # Determine Signal
-        if score >= 75: signal_type = "STRONG BUY 🟢"
-        elif score >= 60: signal_type = "BUY 🟢"
-        elif score <= 25: signal_type = "STRONG SELL 🔴"
-        elif score <= 40: signal_type = "SELL 🔴"
-        else: signal_type = "NEUTRAL 🟡"
+        # RSI
+        rsi = last['RSI']
+        if 50 < rsi < 70: score += 5
+        elif rsi > 70: score -= 5 # Overbought risk
+        elif rsi < 30: score += 10 # Oversold bounce potential
         
-        # Formatting Output with "Professional Card" style
-        rsi_desc = "Oversold (Cheap)" if rsi_val < 30 else "Overbought (Expensive)" if rsi_val > 70 else "Neutral Area"
-        macd_desc = "Bullish Momentum" if last_row['macd'] > last_row['macd_signal'] else "Bearish Momentum"
+        # Volume Flow (Weight: 20%)
+        vol_ratio = last['Volume'] / last['Vol_MA20'] if last['Vol_MA20'] > 0 else 1.0
+        if vol_ratio > 1.5 and price > prev['Close']:
+            score += 10
+            factors.append(f"High Vol Accumulation ({vol_ratio:.1f}x)")
+        elif vol_ratio > 1.5 and price < prev['Close']:
+            score -= 10
+            factors.append(f"High Vol Distribution")
+            
+        # candlestick pattern check (Simple)
+        candle_signal = "Normal"
+        body = abs(last['Close'] - last['Open'])
+        if body < (last['High'] - last['Low']) * 0.1:
+            candle_signal = "Doji (Indecision)"
+        
+        # 4. Generate Narrative & Conclusion
+        
+        # Determine Signal Label
+        if score >= 80: 
+            signal_type = "STRONG BUY 🚀"
+            recommendation = "Aggressive Entry. Trend is your friend."
+        elif score >= 60: 
+            signal_type = "BUY 🟢"
+            recommendation = "Buy on Weakness (BoW). Cicil bertahap."
+        elif score <= 20: 
+            signal_type = "STRONG SELL 🩸"
+            recommendation = "Exit immediately / Stay Cash."
+        elif score <= 40: 
+            signal_type = "SELL 🔴"
+            recommendation = "Sell on Strength (SoS). Kurangi posisi."
+        else: 
+            signal_type = "NEUTRAL 🟡"
+            recommendation = "Wait and See. Tunggu konfirmasi volume."
+            
+        # Construct Pivot Levels
+        pivot = (last['High'] + last['Low'] + last['Close']) / 3
+        r1 = (2 * pivot) - last['Low']
+        s1 = (2 * pivot) - last['High']
+        
+        # Generate Text
         
         summary = (
-            f"🧠 *NEXUS INTELLIGENCE: {ticker}*\n"
+            f"🧠 *NEXUS DEEP INTELLIGENCE: {ticker}*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🚨 *SIGNAL: {signal_type}*\n"
-            f"• Confidence : {score}%\n"
-            f"• Trend      : {macd_desc}\n"
-            f"• Strength   : {rsi_desc}\n\n"
-            f"📐 *KEY LEVELS (Pivot)*:\n"
-            f"🔴 resisten  : {r1:,.0f}\n"
-            f"🔵 support   : {s1:,.0f}\n"
-            f"⚪ pivot     : {pivot:,.0f}\n\n"
-            f"📊 *TECHNICAL DATA*:\n"
-            f"• RSI (14)   : {rsi_val:.1f}\n"
-            f"• MACD       : {last_row['macd']:.2f}\n"
-            f"• Pattern    : {', '.join(patterns) if patterns else 'No Pattern'}\n\n"
-            f"💡 *STRATEGY NOTE*:\n"
-            f"_{ 'Accumulate at Support. Valid breakout soon.' if score > 50 else 'Wait for bottom. Do not catch falling knife.' }_\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━"
+            f"📝 *EXECUTIVE SUMMARY*\n"
+            f"• **Signal**    : {signal_type}\n"
+            f"• **Score**     : {score}/100 (Confidence Level)\n"
+            f"• **Action**    : _{recommendation}_\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🔬 *TECHNICAL DEEP DIVE*\n"
+            f"1. **Trend Alignment**:\n"
+            f"   - Short Term (MA20) : {'✅ Bullish' if price > last['MA20'] else '❌ Bearish'}\n"
+            f"   - Mid Term (MA50)   : {'✅ Bullish' if pd.notna(last['MA50']) and price > last['MA50'] else '❌ Bearish' if pd.notna(last['MA50']) else '⚪ N/A'}\n"
+            f"   - Long Term (MA200) : {'✅ Bullish' if pd.notna(last['MA200']) and price > last['MA200'] else '❌ Bearish' if pd.notna(last['MA200']) else '⚪ N/A'}\n\n"
+            f"2. **Momentum & Flow**:\n"
+            f"   - RSI (14)    : {rsi:.1f} ({'Overbought' if rsi>70 else 'Oversold' if rsi<30 else 'Neutral'})\n"
+            f"   - Stochastic  : K={last['Stoch_K']:.1f} | D={last['Stoch_D']:.1f}\n"
+            f"   - MACD        : {'Golden Cross ↗️' if last['MACD'] > last['MACD_Signal'] else 'Dead Cross ↘️'} (Hist: {last['MACD_Hist']:.2f})\n"
+            f"   - Volume      : {vol_ratio:.1f}x Avg ({'High Interest' if vol_ratio > 1.2 else 'Normal'})\n\n"
+            f"3. **Price Action**:\n"
+            f"   - Candle      : {candle_signal}\n"
+            f"   - Posisi BB   : {'Upper Band (Strong)' if price > last['BB_High'] else 'Lower Band (Weak)' if price < last['BB_Low'] else 'Middle Area'}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🧱 *TRADING PLAN (Intraday/Swing)*\n"
+            f"🎯 Target Tech : {r1:,.0f} - {r1*1.02:,.0f}\n"
+            f"🛡️ Stop Loss   : Under {s1:,.0f}\n"
+            f"⚖️ Pivot Point : {pivot:,.0f}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🤖 *AI NARRATIVE*:\n"
+            f"\"Saham ini secara teknikal menunjukkan {'dominasi buyer' if score > 50 else 'tekanan seller'}. "
+            f"Indikator {'RSI mendukung potensi upside' if rsi < 60 and score > 50 else 'MACD mengonfirmasi momentum' if last['MACD'] > last['MACD_Signal'] else 'sedang konsolidasi'}. "
+            f"Perhatikan level {s1:,.0f} sebagai area support krusial.\""
         )
         
         return summary, signal_type
 
     except Exception as e:
         logger.error(f"Error analyzing {ticker}: {e}")
-        return "⚠️ *Analysis Failed*. Data insufficient.", "ERROR"
+        return "⚠️ *Error*. Gagal melakukan analisa mendalam.", "ERROR"
 
 def scan_bsjp_strategy(watchlist):
     """
