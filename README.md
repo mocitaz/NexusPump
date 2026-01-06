@@ -20,7 +20,7 @@ Bot Telegram untuk analisis teknikal, chart, dan alert saham Indonesia (IDX) sec
 
 2.  **Buat Virtual Environment**
     ```bash
-    python -m venv venv
+    python3 -m venv venv
     source venv/bin/activate  # Mac/Linux
     # venv\Scripts\activate   # Windows
     ```
