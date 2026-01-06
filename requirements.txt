@@ -1,0 +1,10 @@
+python-telegram-bot[job-queue]
+yfinance
+pandas
+ta
+mplfinance
+matplotlib
+apscheduler
+scikit-learn
+numpy
+feedparser
