@@ -952,6 +952,7 @@ async def post_init(application):
         BotCommand("chart", "Lihat Chart Teknikal"),
         BotCommand("analisa", "Analisis AI Lengkap"),
         BotCommand("predict", "Proyeksi Harga Masa Depan"),
+        BotCommand("fibo", "Auto-Fibonacci Golden Ratio"),
         BotCommand("news", "Berita Saham Terkini"),
         BotCommand("screener", "Market Screener (Potensial)"),
         BotCommand("bsjp", "Sinyal Beli Sore Jual Pagi"),
@@ -990,6 +991,8 @@ if __name__ == '__main__':
     application.add_handler(CommandHandler('picks', picks))
     application.add_handler(CommandHandler('sectors', sectors))
     application.add_handler(CommandHandler('rekomendasi', picks))
+    
+    application.add_handler(CommandHandler('fibo', fibo)) # NEW
     
     # Portfolio Handlers
     application.add_handler(CommandHandler('buy', buy))
