@@ -127,22 +127,29 @@ def analyze_stock(ticker):
         elif score <= 40: signal_type = "SELL"
         else: signal_type = "NEUTRAL"
         
-        # Formatting Output with "Cards" style
+        # Formatting Output with "Professional Card" style
+        # Explanation logic
+        rsi_desc = "Jenuh Jual (Potensi Naik)" if rsi_val < 30 else "Jenuh Beli (Potensi Turun)" if rsi_val > 70 else "Normal (Stabil)"
+        macd_desc = "Momentum Bullish" if last_row['macd'] > last_row['macd_signal'] else "Momentum Bearish"
+        
         summary = (
-            f"📊 *Analisis Teknikal Premium: {ticker}*\n"
-            f"Harga: {current_price:,.0f}\n\n"
-            f"🧠 *Signal AI*: _{signal_type}_ (Score: {score}/100)\n\n"
-            f"📐 *Key Levels (Pivot)*:\n"
-            f"• R1: {r1:,.0f}\n"
-            f"• Pivot: {pivot:,.0f}\n"
-            f"• S1: {s1:,.0f}\n\n"
-            f"📈 *Indikator*:\n"
-            f"• RSI(14): {rsi_val:.2f}\n"
-            f"• MACD: {last_row['macd']:.2f}\n\n"
-            f"🕯 *Pola Candle*:\n"
-            f"{', '.join(patterns) if patterns else '-'}\n\n"
-            f"⚡ *Catatan*:\n"
-            f"{' • '.join(signals) if signals else 'Tidak ada trigger khusus.'}"
+            f"🏢 *Laporan Analisis Teknikal: {ticker}*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💵 *Harga Terkini*: Rp {current_price:,.0f}\n\n"
+            f"🧠 *Kesimpulan AI*:\n"
+            f"👉 Status: *{signal_type}* (Keyakinan: {score}%)\n"
+            f"_Sistem mendeteksi momentum {macd_desc.lower()} dengan kondisi RSI yang {rsi_desc.lower()}._\n\n"
+            f"📐 *Level Penting (Pivot Points)*:\n"
+            f"🔴 Resistance (R1): {r1:,.0f}\n"
+            f"🔵 Support (S1): {s1:,.0f}\n"
+            f"⚪ Pivot Tengah: {pivot:,.0f}\n\n"
+            f"📊 *Indikator Utama*:\n"
+            f"• RSI (14): {rsi_val:.1f} → _{rsi_desc}_\n"
+            f"• MACD: {last_row['macd']:.2f} / Signal: {last_row['macd_signal']:.2f}\n"
+            f"• Pola Candle: {', '.join(patterns) if patterns else 'Tidak ada pola spesifik'}\n\n"
+            f"💡 *Saran Profesional*:\n"
+            f"{'Pantau area Support S1 untuk entry terbaik.' if score > 50 else 'Waspada jika harga tembus Support S1.'} "
+            f"Tetap disiplin dengan Stop Loss."
         )
         
         return summary, signal_type
@@ -229,8 +236,14 @@ def predict_future_price(ticker, days=7):
         X = df[['ordinal_date']].values
         y = df['Close'].values
         
-        model = LinearRegression()
-        model.fit(X, y)
+        score = model.score(X, y) * 100 # R-Squared confidence
+        slope = model.coef_[0]
+        
+        # Determine trend description
+        if slope > 10: trend_desc = "Tren Sangat Positif (Bullish Kuat)"
+        elif slope > 0: trend_desc = "Tren Cenderung Naik (Bullish)"
+        elif slope > -10: trend_desc = "Tren Cenderung Turun (Bearish)"
+        else: trend_desc = "Tren Sangat Negatif (Bearish Kuat)"
         
         # Predict next 'days'
         last_date = df['Date'].iloc[-1]
@@ -238,14 +251,30 @@ def predict_future_price(ticker, days=7):
         future_ordinal = np.array([d.toordinal() for d in future_dates]).reshape(-1, 1)
         
         predictions = model.predict(future_ordinal)
+        target_price = predictions[-1]
+        current_price = y[-1]
+        potential = ((target_price - current_price) / current_price) * 100
         
-        msg = f"🔮 *Prediksi Harga (Linear Regression) - {days} hari ke depan*:\n"
+        emoji_trend = "📈" if slope > 0 else "📉"
+        
+        msg = (
+            f"🔮 *Prediksi Harga Saham Professional: {ticker}*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🎯 *Target 7 Hari*: Rp {target_price:,.0f} ({potential:+.2f}%)\n"
+            f"⚙️ *Akurasi Model*: {score:.1f}%\n"
+            f"📊 *Status Tren*: {trend_desc} {emoji_trend}\n\n"
+            f"📝 *Analisis & Alasan*:\n"
+            f"Berdasarkan data historis 3 bulan terakhir, pergerakan harga membentuk pola regresi dengan kemiringan {slope:.2f}. "
+            f"Model memproyeksikan {'kenaikan' if potential > 0 else 'penurunan'} lanjutan ke level Rp {target_price:,.0f} dalam sepekan kedepan.\n\n"
+            f"📅 *Rincian Hari ke Hari*:\n"
+        )
+        
         for i, val in enumerate(predictions):
-            msg += f"+ {i+1} hari: Rp {val:,.0f}\n"
+            msg += f"• H+{i+1}: Rp {val:,.0f}\n"
             
-        msg += "\n_Disclaimer: Prediksi ini menggunakan model statistik sederhana dan bukan saran keuangan._"
+        msg += "\n💡 _Disclaimer: Prediksi berdasarkan probabilitas statistik. Tetap gunakan manajemen risiko terbaik._"
         return msg
 
     except Exception as e:
         logger.error(f"Prediction error for {ticker}: {e}")
-        return "Gagal melakukan prediksi."
+        return "⚠️ Maaf, terjadi kesalahan saat melakukan kalkulasi prediksi. Data saham mungkin tidak mencukupi."

@@ -50,87 +50,105 @@ monitor = StockMonitor()
 # --- Command Handlers ---
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user.first_name
     help_text = (
-        "🤖 *NEXUS PUMP BOT V2*\n"
-        "------------------------------\n"
-        "/harga <kode> - Harga Live & Data Kunci\n"
-        "/chart <kode> - Chart Dark Mode + RSI/MACD\n"
-        "/analisa <kode> - Sinyal AI + Pola Candle\n"
-        "/news <kode> - Berita Terupdate (EKSKLUSIF)\n"
-        "/predict <kode> - Prediksi Algoritma\n"
-        "/gainers - Top Movers Hari Ini\n"
-        "------------------------------\n"
-        "_Data delay 15 min (Free)_"
+        f"👋 *Halo, {user}! Selamat datang di Nexus Pump.*\n\n"
+        "Saya adalah asisten investasi profesional Anda. Berikut layanan yang tersedia:\n\n"
+        "📊 *INFORMASI PASAR*\n"
+        "• `/harga <kode>` - Data detil (Fundamental & Teknikal)\n"
+        "• `/chart <kode>` - Chart Professional (MA, RSI, MACD)\n"
+        "• `/news <kode>` - Berita & Sentimen Terkini\n\n"
+        "🧠 *ANALISIS CERDAS*\n"
+        "• `/analisa <kode>` - Sinyal AI & Pivot Points\n"
+        "• `/predict <kode>` - Proyeksi Harga & Alasan Statistik\n\n"
+        "🚀 *TOP MOVERS*\n"
+        "• `/gainers` - Saham Paling Untung Hari Ini\n"
+        "• `/losers` - Saham Paling Rugi Hari Ini\n\n"
+        "_💡 Tips: Gunakan bot ini sebagai referensi kedua. Keputusan jual/beli tetap di tangan Anda._"
     )
     await update.message.reply_text(help_text, parse_mode='Markdown')
 
 async def harga(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
-        await update.message.reply_text("Gunakan: /harga <kode>")
+        await update.message.reply_text("⛔ Gunakan format: `/harga <kode saham>`\nContoh: `/harga BBCA`", parse_mode='Markdown')
         return
 
     ticker = context.args[0].upper()
-    waiting_msg = await update.message.reply_text(f"🔍 Mencari data premium {ticker}...")
+    waiting_msg = await update.message.reply_text(f"🔄 Sedang mengambil data lengkap *{ticker}*...", parse_mode='Markdown')
     
     data = get_stock_price(ticker)
     
     if data:
-        emoji = "🚀" if data['change'] >= 0 else "🔻"
-        color = "🟢" if data['change'] >= 0 else "🔴"
+        emoji = "💹" if data['change'] >= 0 else "🔻"
+        color_indicator = "🟢 Bullish" if data['change'] >= 0 else "🔴 Bearish"
         
-        # Premium Card Style
+        # Format Market Cap to Triliun/Miliar
+        mcap = data['market_cap']
+        if mcap >= 1_000_000_000_000:
+            mcap_str = f"{mcap/1_000_000_000_000:.2f} T"
+        elif mcap >= 1_000_000_000:
+            mcap_str = f"{mcap/1_000_000_000:.0f} M"
+        else:
+            mcap_str = f"{mcap:,.0f}"
+
         msg = (
-            f"{color} *{data['ticker']}* {emoji}\n"
-            f"━━━━━━━━━━━━━━━━━━\n"
+            f"🏢 *{data['long_name']} ({data['ticker']})*\n"
+            f"Kategori: _{data['sector']}_\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"💰 *Harga*: Rp {data['price']:,.0f}\n"
-            f"📊 *Change*: {data['change']:+,.0f} ({data['change_pct']:.2f}%)\n"
-            f"📈 *High/Low*: {data['high']:,.0f} - {data['low']:,.0f}\n"
-            f"📦 *Volume*: {data['volume']:,.0f}\n"
-            f"━━━━━━━━━━━━━━━━━━\n"
-            f"_Gunakan /analisa {ticker} untuk detil teknikal_"
+            f"{emoji} *Perubahan*: {data['change']:+,.0f} ({data['change_pct']:.2f}%)\n"
+            f"📊 *Status*: {color_indicator}\n\n"
+            f"📉 *Rentang Harian*:\n"
+            f"Low: {data['low']:,.0f} — High: {data['high']:,.0f}\n\n"
+            f"📦 *Statistik Kunci*:\n"
+            f"• Vol: {data['volume']:,.0f}\n"
+            f"• M.Cap: Rp {mcap_str}\n"
+            f"• PE Ratio: {data['pe_ratio'] if data['pe_ratio'] else '-'}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"ℹ️ _Ketik /analisa {ticker} untuk sinyal beli/jual._"
         )
         await waiting_msg.edit_text(msg, parse_mode='Markdown')
     else:
-        await waiting_msg.edit_text(f"❌ Data {ticker} tidak ditemukan.")
+        await waiting_msg.edit_text(f"❌ Data *{ticker}* tidak ditemukan atau simbol salah.", parse_mode='Markdown')
 
 async def chart(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
-        await update.message.reply_text("Gunakan: /chart <kode> [periode: 1d, 5d, 1mo, 3mo]")
+        await update.message.reply_text("⛔ Gunakan format: `/chart <kode>`", parse_mode='Markdown')
         return
 
     ticker = context.args[0].upper()
     period = context.args[1] if len(context.args) > 1 else "3mo"
     
-    await update.message.reply_text(f"🎨 Generating Premium Chart {ticker} ({period})...")
+    await update.message.reply_text(f"🎨 Menggambar Chart Professional *{ticker}* ({period})...", parse_mode='Markdown')
     
-    # Send 'typing' action or just wait
     img_buf = generate_chart(ticker, period)
     if img_buf:
         await update.message.reply_photo(
             photo=img_buf, 
-            caption=f"📊 *Chart Premium: {ticker} ({period})*\n_Dilengkapi RSI & MACD_"
+            caption=f"📈 *Chart Professional: {ticker}*\n_Indikator: MA20/50/100 + Volume_",
+            parse_mode='Markdown'
         )
     else:
-        await update.message.reply_text("❌ Gagal membuat chart. Cek kode saham.")
+        await update.message.reply_text("❌ Gagal membuat chart. Pastikan kode saham benar.")
 
 async def analisa(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
-        await update.message.reply_text("Gunakan: /analisa <kode>")
+        await update.message.reply_text("⛔ Gunakan format: `/analisa <kode>`", parse_mode='Markdown')
         return
         
     ticker = context.args[0].upper()
-    waiting_msg = await update.message.reply_text(f"🧠 AI sedang menganalisis {ticker}...")
+    waiting_msg = await update.message.reply_text(f"🧠 AI sedang melakukan analisis mendalam *{ticker}*...", parse_mode='Markdown')
     
     summary, signal = analyze_stock(ticker)
     await waiting_msg.edit_text(summary, parse_mode='Markdown')
 
 async def news(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
-        await update.message.reply_text("Gunakan: /news <kode>")
+        await update.message.reply_text("⛔ Gunakan format: `/news <kode>`", parse_mode='Markdown')
         return
         
     ticker = context.args[0].upper()
-    waiting_msg = await update.message.reply_text(f"📰 Mengambil berita {ticker}...")
+    waiting_msg = await update.message.reply_text(f"📰 Mengumpulkan berita terkini *{ticker}*...", parse_mode='Markdown')
     
     items = get_stock_news(ticker)
     msg = format_news_message(ticker, items)
@@ -139,37 +157,41 @@ async def news(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def predict(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
-        await update.message.reply_text("Gunakan: /predict <kode>")
+        await update.message.reply_text("⛔ Gunakan format: `/predict <kode>`", parse_mode='Markdown')
         return
         
     ticker = context.args[0].upper()
-    waiting_msg = await update.message.reply_text(f"🔮 Menghitung prediksi {ticker}...")
+    waiting_msg = await update.message.reply_text(f"🔮 Mengkalkulasi proyeksi harga *{ticker}*...", parse_mode='Markdown')
     
     res = predict_future_price(ticker)
     await waiting_msg.edit_text(res, parse_mode='Markdown')
 
 async def gainers(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🔍 Scanning Top Gainers...")
+    await update.message.reply_text("🔍 Memindai Top Gainers IHSG...", parse_mode='Markdown')
     g, _ = get_top_gainers_losers_idx()
     if not g:
-        await update.message.reply_text("Data tidak tersedia.")
+        await update.message.reply_text("❌ Data pasar tidak tersedia saat ini.")
         return
         
-    msg = "🚀 *Top Gainers Hari Ini*\n"
-    for s in g:
-        msg += f"{s['ticker']}: {s['price']:,.0f} (+{s['change_pct']:.2f}%)\n"
+    msg = "🚀 *TOP 5 GAINERS HARI INI*\n━━━━━━━━━━━━━━━━━━━━\n"
+    for i, s in enumerate(g):
+        msg += f"{i+1}. *{s['ticker']}*: {s['price']:,.0f} (+{s['change_pct']:.2f}%)\n"
+    
+    msg += "\n_Update Real-time (Delay 15m)_"
     await update.message.reply_text(msg, parse_mode='Markdown')
 
 async def losers(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🔍 Scanning Top Losers...")
+    await update.message.reply_text("🔍 Memindai Top Losers IHSG...", parse_mode='Markdown')
     _, l = get_top_gainers_losers_idx()
     if not l:
-        await update.message.reply_text("Data tidak tersedia.")
+        await update.message.reply_text("❌ Data pasar tidak tersedia saat ini.")
         return
         
-    msg = "🔻 *Top Losers Hari Ini*\n"
-    for s in l:
-        msg += f"{s['ticker']}: {s['price']:,.0f} ({s['change_pct']:.2f}%)\n"
+    msg = "🔻 *TOP 5 LOSERS HARI INI*\n━━━━━━━━━━━━━━━━━━━━\n"
+    for i, s in enumerate(l):
+        msg += f"{i+1}. *{s['ticker']}*: {s['price']:,.0f} ({s['change_pct']:.2f}%)\n"
+        
+    msg += "\n_Update Real-time (Delay 15m)_"
     await update.message.reply_text(msg, parse_mode='Markdown')
 
 # --- Background Tasks ---
