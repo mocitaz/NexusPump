@@ -131,8 +131,9 @@ class StockMonitor:
         return alerts
 
 class MarketSessionReporter:
-    def __init__(self, bot_app):
+    def __init__(self, bot_app, channel_id=None):
         self.bot = bot_app
+        self.channel_id = channel_id
         
     async def send_report(self, context, session_type):
         """
@@ -152,7 +153,7 @@ class MarketSessionReporter:
         # 2. Construct Message
         if session_type == 'open':
             msg = (
-                f"� *NEXUS EXECUTIVE BRIEFING: SESSION 1* 🔔\n"
+                f"🔔 *NEXUS EXECUTIVE BRIEFING: SESSION 1* 🔔\n"
                 f"⏰ {time_str} WIB\n"
                 "━━━━━━━━━━━━━━━━━━━━━━\n"
                 "Market Opening detected. Volatility scan active.\n"
@@ -213,11 +214,15 @@ class MarketSessionReporter:
 
         # Send to Channel
         try:
-            import os
-            channel_id = os.getenv("TELEGRAM_CHANNEL_ID")
-            if channel_id:
-                await context.bot.send_message(chat_id=channel_id, text=msg, parse_mode='Markdown')
+            # Prefer injected ID, fallback to env var logic only if really needed (but Init should handle it)
+            cid = self.channel_id
+            
+            if cid:
+                if cid == "@your_channel_id":
+                     logger.warning("Channel ID is default/invalid. Skipping report.")
+                else:
+                     await context.bot.send_message(chat_id=cid, text=msg, parse_mode='Markdown')
             else:
-                logger.warning("No Channel ID for report")
+                logger.warning("No Channel ID provided for report")
         except Exception as e:
             logger.error(f"Failed to send report: {e}")

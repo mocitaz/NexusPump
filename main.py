@@ -824,17 +824,18 @@ async def market_alert_job(context: ContextTypes.DEFAULT_TYPE):
                 logger.error(f"Failed to send alert: {e}")
 
 # ... Session reporters ...
+# ... Session reporters ...
 async def session_open(context: ContextTypes.DEFAULT_TYPE):
-    reporter = MarketSessionReporter(context.application)
+    reporter = MarketSessionReporter(context.application, channel_id=CHANNEL_ID)
     await reporter.send_report(context, 'open')
 async def session_mid(context: ContextTypes.DEFAULT_TYPE):
-    reporter = MarketSessionReporter(context.application)
+    reporter = MarketSessionReporter(context.application, channel_id=CHANNEL_ID)
     await reporter.send_report(context, 'mid')
 async def session_open2(context: ContextTypes.DEFAULT_TYPE):
-    reporter = MarketSessionReporter(context.application)
+    reporter = MarketSessionReporter(context.application, channel_id=CHANNEL_ID)
     await reporter.send_report(context, 'open2')
 async def session_close(context: ContextTypes.DEFAULT_TYPE):
-    reporter = MarketSessionReporter(context.application)
+    reporter = MarketSessionReporter(context.application, channel_id=CHANNEL_ID)
     await reporter.send_report(context, 'close')
     
 async def channel_command_dispatcher(update: Update, context: ContextTypes.DEFAULT_TYPE):
