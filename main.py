@@ -131,7 +131,7 @@ async def chart(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     ticker = args[0].upper()
-    period = args[1] if len(args) > 1 else "3mo"
+    period = args[1] if len(args) > 1 else "1mo"
     
     # Reply target
     target_msg = update.message if update.message else update.callback_query.message
