@@ -7,6 +7,7 @@ from data_fetcher import get_stock_price, get_top_gainers_losers_idx
 from chart_generator import generate_chart
 from analyzer import analyze_stock, predict_future_price, scan_bsjp_strategy
 from idx_tickers import IDX_WATCHLIST
+from alerts import StockMonitor
 
 # ... (Previous imports)
 
