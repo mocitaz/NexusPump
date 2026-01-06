@@ -157,7 +157,130 @@ def analyze_stock(ticker):
         logger.error(f"Error analyzing {ticker}: {e}")
         return "⚠️ *Analysis Failed*. Data insufficient.", "ERROR"
 
-# ... (skip scan_bsjp_strategy, scan_market_screener as they return dicts) ...
+def scan_bsjp_strategy(watchlist):
+    """
+    Screens for 'Beli Sore Jual Pagi' (BSJP) candidates.
+    Criteria:
+    1. Uptrend (Price > MA20)
+    2. Strong Momentum (Gain > 2% but < 10%)
+    3. High Volume (> 1.2x Avg Vol 20)
+    4. Strong Close (Close near High, upper wick < 30% of body)
+    """
+    from data_fetcher import get_historical_data # Import here to avoid circular if using threading later
+    
+    candidates = []
+    
+    for ticker in watchlist:
+        try:
+            # We need history for MA and Avg Volume
+            df = get_historical_data(ticker, period="2mo")
+            if df.empty or len(df) < 21:
+                continue
+                
+            last_row = df.iloc[-1]
+            
+            # 1. Gain Check
+            prev_close = df.iloc[-2]['Close']
+            change_pct = ((last_row['Close'] - prev_close) / prev_close) * 100
+            
+            if not (2.0 <= change_pct <= 15.0):
+                continue
+                
+            # 2. Uptrend Check (Price > MA20)
+            ma20 = df['Close'].rolling(window=20).mean().iloc[-1]
+            if last_row['Close'] < ma20:
+                continue
+                
+            # 3. Volume Check
+            avg_vol = df['Volume'].rolling(window=20).mean().iloc[-1]
+            if last_row['Volume'] < (avg_vol * 1.2):
+                continue
+            
+            # 4. Strong Close (Upper wick small)
+            # Upper wick = High - Max(Open, Close)
+            # We want Close to be very close to High.
+            # Safe threshold: Close > High * 0.97
+            if last_row['Close'] < (last_row['High'] * 0.97):
+                continue
+                
+            candidates.append({
+                "ticker": ticker,
+                "price": last_row['Close'],
+                "change": change_pct,
+                "volume_ratio": last_row['Volume'] / avg_vol
+            })
+            
+        except Exception as e:
+            continue
+            
+    # Sort by strongest volume relative to avg
+    candidates.sort(key=lambda x: x['volume_ratio'], reverse=True)
+    return candidates
+
+def scan_market_screener(watchlist):
+    """
+    Scans for the /screener command.
+    Returns list of dicts: Ticker, Price, Potential%, BSJP Score, Bandar Status.
+    """
+    results = []
+    
+    # We reuse get_historical_data but need to be careful with rate limits if list is huge.
+    # Assuming watchlist is ~50-70 stocks.
+    
+    for ticker in watchlist:
+        try:
+            df = get_historical_data(ticker, period="1mo")
+            if df.empty or len(df) < 20: continue
+            
+            last = df.iloc[-1]
+            prev = df.iloc[-2]
+            
+            # 1. Potential (Upside to Resistance)
+            pivot = (last['High'] + last['Low'] + last['Close']) / 3
+            r1 = (2 * pivot) - last['Low']
+            potential_upside = ((r1 - last['Close']) / last['Close']) * 100
+            
+            # 2. BSJP Safe Score (Volatility & Trend)
+            # Safe if Uptrend AND Low Volatility on Close
+            ma20 = df['Close'].rolling(20).mean().iloc[-1]
+            is_uptrend = last['Close'] > ma20
+            body_size = abs(last['Close'] - last['Open']) / last['Open']
+            is_stable = body_size < 0.03 # Candle body < 3%
+            
+            bsjp_status = "AMAN ✅" if (is_uptrend and is_stable) else "RISK ⚠️"
+            
+            # 3. Bandar / Akumulasi Proxy
+            # Logic: High Volume + Price Up = Accumulation
+            # Low Volume + Price Down = Distribution (Weak)
+            # High Volume + Price Down = Distribution (Strong)
+            
+            avg_vol = df['Volume'].rolling(20).mean().iloc[-1]
+            vol_ratio = last['Volume'] / avg_vol
+            
+            if vol_ratio > 1.5 and last['Close'] > prev['Close']:
+                bandar_sts = "AKUM 🐳"
+            elif vol_ratio > 1.5 and last['Close'] < prev['Close']:
+                bandar_sts = "DIST 🔻"
+            elif vol_ratio < 0.8:
+                bandar_sts = "SEPI 💤"
+            else:
+                bandar_sts = "NORMAL"
+                
+            results.append({
+                "ticker": ticker,
+                "price": last['Close'],
+                "potential": potential_upside,
+                "bsjp": bsjp_status,
+                "bandar": bandar_sts,
+                "date": last.name.strftime('%d-%m')
+            })
+            
+        except Exception:
+            continue
+            
+    # Sort by best potential
+    results.sort(key=lambda x: x['potential'], reverse=True)
+    return results
 
 def predict_future_price(ticker, days=7):
     """
