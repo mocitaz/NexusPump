@@ -211,5 +211,6 @@ if __name__ == '__main__':
     # Run every 5 minutes (300s)
     job_queue.run_repeating(market_alert_job, interval=300, first=10)
     
+    print("--- NEXUS PUMP BOT V2 STARTING ---")
     print("Bot is running...")
     application.run_polling()
