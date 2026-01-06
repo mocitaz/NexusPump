@@ -1,16 +1,19 @@
 import logging
 import os
 import asyncio
+import datetime
+import pytz
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, CallbackQueryHandler, MessageHandler, filters
+
+# Modules
 from data_fetcher import get_stock_price, get_top_gainers_losers_idx, get_stock_news
 from chart_generator import generate_chart
-from analyzer import analyze_stock, predict_future_price, scan_bsjp_strategy, scan_market_screener, scan_whale_flow, scan_top_picks
+from analyzer import analyze_stock, predict_future_price, scan_bsjp_strategy, scan_market_screener, scan_whale_flow, scan_top_picks, scan_sector_performance
 from market_pulse import calculate_market_mood, generate_gauge_chart
 from idx_tickers import IDX_WATCHLIST
 from alerts import StockMonitor, MarketSessionReporter
-import datetime
-import pytz
+from portfolio_manager import PortfolioManager
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -22,8 +25,9 @@ logger = logging.getLogger(__name__)
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8446598251:AAE7EnK-1qwtr4hVLJF5TotPvcqYqB4jiCw")
 CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID", "@nexuspump")
 
-# Global Monitor Instance
+# Global Instances
 monitor = StockMonitor()
+portfolio_db = PortfolioManager()
 
 # --- Helpers ---
 
@@ -60,8 +64,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• `/pulse`    : Cek 'Detak Jantung' Market (Fear vs Greed).\n"
         "• `/flow`     : Radar 'Bandar Flow' & Whale Accumulation.\n"
         "• `/screener` : Scanner Saham Potensial (Top Picks).\n"
-        "• `/sectors`  : Peta Rotasi Sektor (Flow of Funds). 🆕\n"
+        "• `/sectors`  : Peta Rotasi Sektor (Flow of Funds).\n"
         "• `/picks`    : Top 5 Saham Pilihan Besok (Prime Watchlist).\n\n"
+        "💼 *PORTFOLIO MANAGER* 🆕\n"
+        "• `/buy`      : Catat Pembelian (`/buy BBCA 9000 10`).\n"
+        "• `/sell`     : Catat Penjualan.\n"
+        "• `/porto`    : Cek Valuasi & Floating PnL.\n\n"
         "🧠 *DEEP INTELLIGENCE*\n"
         "• `/analisa <kode>` : AI Professional Analysis (Multi-Timeframe).\n"
         "• `/predict <kode>` : Future Projection (Scenario Mapping).\n"
@@ -277,6 +285,156 @@ async def flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg += "━━━━━━━━━━━━━━━━━━━━━━\n💡 _Radar mendeteksi anomali volume dan aktivitas Smart Money._"
     await waiting.edit_text(msg, parse_mode='Markdown')
 
+async def sectors(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    target_msg = update.message if update.message else update.callback_query.message
+    waiting = await target_msg.reply_text("🗺️ *Scanning Sector Map...*", parse_mode='Markdown')
+
+    try:
+        data = await asyncio.wait_for(
+            asyncio.to_thread(scan_sector_performance),
+            timeout=25.0
+        )
+    except asyncio.TimeoutError:
+        await waiting.edit_text("⚠️ *Timeout*. Server sibuk.")
+        return
+    except Exception as e:
+        logger.error(f"Sectors error: {e}")
+        await waiting.edit_text("❌ Gagal scan sektor.")
+        return
+        
+    if not data:
+        await waiting.edit_text("❌ Data Sektor tidak tersedia.")
+        return
+        
+    time_str = datetime.datetime.now(pytz.timezone('Asia/Jakarta')).strftime('%H:%M')
+    msg = f"🗺️ *NEXUS SECTOR RADAR*\n⏰ {time_str} WIB\n━━━━━━━━━━━━━━━━━━━━━━\n"
+    
+    for d in data:
+        sector_name = d['sector']
+        avg = d['avg_change']
+        stats = d['stats']
+        top = d['top_stock']
+        top_chg = d['top_change']
+        msg += (
+            f"{stats} *{sector_name}* ({avg:+.1f}%)\n"
+            f"   🏆 Lead: {top} ({top_chg:+.1f}%)\n\n"
+        )
+        
+    msg += "━━━━━━━━━━━━━━━━━━━━━━\n💡 _Rotasi sektor menunjukkan arus uang Smart Money._"
+    await waiting.edit_text(msg, parse_mode='Markdown')
+
+# --- PORTFOLIO HANDLERS ---
+
+async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    args = context.args if hasattr(context, 'args') and context.args else context.args
+    # /buy BBCA 9500 10
+    if not args or len(args) < 3:
+        if update.message: await update.message.reply_text("⛔ Format: `/buy <kode> <harga> <lot>`\nContoh: `/buy BBCA 9500 10`", parse_mode='Markdown')
+        return
+    
+    try:
+        ticker = args[0].upper()
+        price = int(args[1])
+        lots = int(args[2])
+        
+        user_id = update.effective_user.id
+        new_pos = portfolio_db.buy_stock(user_id, ticker, price, lots)
+        
+        avg = new_pos['avg_price']
+        tot = new_pos['lots']
+        
+        msg = (
+            f"✅ *BUY RECORDED: {ticker}*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💵 Price : {price}\n"
+            f"📦 Lots  : {lots}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📊 *New Position*:\n"
+            f"Avg Price: {avg:,.0f}\n"
+            f"Total Lot: {tot}"
+        )
+        if update.message: await update.message.reply_text(msg, parse_mode='Markdown')
+        
+    except ValueError:
+        if update.message: await update.message.reply_text("❌ Error: Harga/Lot harus angka.", parse_mode='Markdown')
+
+async def sell(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    args = context.args if hasattr(context, 'args') and context.args else context.args
+    # /sell BBCA 5
+    if not args or len(args) < 2:
+        if update.message: await update.message.reply_text("⛔ Format: `/sell <kode> <lot>`\nContoh: `/sell BBCA 5`", parse_mode='Markdown')
+        return
+
+    try:
+        ticker = args[0].upper()
+        lots = int(args[1])
+        user_id = update.effective_user.id
+        
+        res = portfolio_db.sell_stock(user_id, ticker, lots)
+        
+        if res == -1:
+            await update.message.reply_text(f"❌ Anda tidak punya saham *{ticker}*.", parse_mode='Markdown')
+        elif res == -2:
+             await update.message.reply_text(f"❌ Lot tidak cukup. Cek `/porto`.", parse_mode='Markdown')
+        else:
+            await update.message.reply_text(f"✅ *SELL SUCCESS: {ticker}*\nSisa Lot: {res}", parse_mode='Markdown')
+            
+    except ValueError:
+        await update.message.reply_text("❌ Error: Lot harus angka.", parse_mode='Markdown')
+
+async def porto(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    target_msg = update.message if update.message else update.callback_query.message
+    waiting = await target_msg.reply_text("💼 *Calculating Portfolio Valuation...*", parse_mode='Markdown')
+    
+    user_id = update.effective_user.id
+    holdings = portfolio_db.get_portfolio(user_id)
+    
+    if not holdings:
+        await waiting.edit_text("💼 *Portfolio Kosong*.\nGunakan `/buy` untuk mulai mencatat.", parse_mode='Markdown')
+        return
+
+    tickers = list(holdings.keys())
+    
+    total_val = 0
+    total_cost = 0
+    lines = []
+    
+    for t, data in holdings.items():
+        # Get Price
+        p_data = get_stock_price(t) # Live price
+        curr_price = p_data['price'] if p_data else data['avg_price']
+        
+        lots = data['lots']
+        avg = data['avg_price']
+        
+        mkt_val = curr_price * lots * 100
+        cost_val = avg * lots * 100
+        pnl = mkt_val - cost_val
+        pnl_pct = ((curr_price - avg) / avg) * 100
+        
+        total_val += mkt_val
+        total_cost += cost_val
+        
+        icon = "🟢" if pnl >= 0 else "🔴"
+        lines.append(
+            f"{icon} *{t}* ({lots} Lot)\n"
+            f"   💵 Avg: {avg:,.0f} | Curr: {curr_price:,.0f}\n"
+            f"   📈 PnL: *{pnl_pct:+.2f}%* (Rp {pnl:,.0f})"
+        )
+        
+    pnl_total = total_val - total_cost
+    pnl_total_pct = ((total_val - total_cost) / total_cost * 100) if total_cost > 0 else 0
+    
+    header = (
+        "💼 *NEXUS PORTFOLIO SUMMARY*\n"
+        f"💰 *Total Asset: Rp {total_val:,.0f}*\n"
+        f"💸 Floating PnL: *{pnl_total_pct:+.2f}%* (Rp {pnl_total:,.0f})\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+    )
+    
+    msg = header + "\n\n".join(lines)
+    await waiting.edit_text(msg, parse_mode='Markdown')    
+
 # --- Button Callback Handler ---
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -457,9 +615,7 @@ async def picks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target_msg = update.message if update.message else update.callback_query.message
     waiting = await target_msg.reply_text("🔭 *Scanning Nexus Prime Watchlist (Tomorrow)...*", parse_mode='Markdown')
     
-    # Async Scan
     try:
-        # Use timeout to prevent hanging
         candidates = await asyncio.wait_for(
             asyncio.to_thread(scan_top_picks, IDX_WATCHLIST),
             timeout=30.0 
@@ -487,47 +643,6 @@ async def picks(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     
     msg += "━━━━━━━━━━━━━━━━━━━━━━\n💡 _Top 5 Saham Uptrend + Akumulasi untuk dipantau besok._"
-    await waiting.edit_text(msg, parse_mode='Markdown')
-
-async def sectors(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    target_msg = update.message if update.message else update.callback_query.message
-    waiting = await target_msg.reply_text("🗺️ *Scanning Sector Map...*", parse_mode='Markdown')
-
-    try:
-        data = await asyncio.wait_for(
-            asyncio.to_thread(scan_sector_performance),
-            timeout=25.0
-        )
-    except asyncio.TimeoutError:
-        await waiting.edit_text("⚠️ *Timeout*. Server sibuk.")
-        return
-    except Exception as e:
-        logger.error(f"Sectors error: {e}")
-        await waiting.edit_text("❌ Gagal scan sektor.")
-        return
-        
-    if not data:
-        await waiting.edit_text("❌ Data Sektor tidak tersedia.")
-        return
-        
-    time_str = datetime.datetime.now(pytz.timezone('Asia/Jakarta')).strftime('%H:%M')
-    msg = f"🗺️ *NEXUS SECTOR RADAR*\n⏰ {time_str} WIB\n━━━━━━━━━━━━━━━━━━━━━━\n"
-    
-    for d in data:
-        sector_name = d['sector']
-        avg = d['avg_change']
-        stats = d['stats']
-        top = d['top_stock']
-        top_chg = d['top_change']
-        
-        # Formatting
-        # Energy  🔥 +1.2% | ADRO +3%
-        msg += (
-            f"{stats} *{sector_name}* ({avg:+.1f}%)\n"
-            f"   🏆 Lead: {top} ({top_chg:+.1f}%)\n\n"
-        )
-        
-    msg += "━━━━━━━━━━━━━━━━━━━━━━\n💡 _Rotasi sektor menunjukkan arus uang Smart Money._"
     await waiting.edit_text(msg, parse_mode='Markdown')
 
 # --- Background Tasks ---
@@ -597,7 +712,8 @@ async def channel_command_dispatcher(update: Update, context: ContextTypes.DEFAU
         'start': start, 'harga': harga, 'chart': chart, 'analisa': analisa,
         'news': news, 'predict': predict, 'screener': screener, 'bsjp': bsjp,
         'gainers': gainers, 'losers': losers, 'pulse': pulse, 'flow': flow,
-        'picks': picks, 'rekomendasi': picks
+        'picks': picks, 'rekomendasi': picks, 'sectors': sectors,
+        'buy': buy, 'sell': sell, 'porto': porto, 'portfolio': porto
     }
     if command in cmd_map:
         await cmd_map[command](update, context)
@@ -622,7 +738,14 @@ if __name__ == '__main__':
     application.add_handler(CommandHandler('pulse', pulse))
     application.add_handler(CommandHandler('flow', flow))
     application.add_handler(CommandHandler('picks', picks))
+    application.add_handler(CommandHandler('sectors', sectors))
     application.add_handler(CommandHandler('rekomendasi', picks))
+    
+    # Portfolio Handlers
+    application.add_handler(CommandHandler('buy', buy))
+    application.add_handler(CommandHandler('sell', sell))
+    application.add_handler(CommandHandler('porto', porto))
+    application.add_handler(CommandHandler('portfolio', porto))
     
     # CALLBACK HANDLER (The New V14 Core)
     application.add_handler(CallbackQueryHandler(button_callback))
@@ -642,5 +765,5 @@ if __name__ == '__main__':
     job_queue.run_daily(session_open2, time=datetime.time(hour=13, minute=30, tzinfo=tz_jkt), days=weekdays)
     job_queue.run_daily(session_close, time=datetime.time(hour=16, minute=0, tzinfo=tz_jkt), days=weekdays)
     
-    print("--- NEXUS PUMP BOT V19-V21 STARTING ---")
+    print("--- NEXUS PUMP BOT V19-V26 STARTING ---")
     application.run_polling()
