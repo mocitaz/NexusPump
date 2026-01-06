@@ -102,16 +102,16 @@ class StockMonitor:
                          reason = "🔊 VOLUME SPIKE (Big Money Flow)"
 
                     if is_alert:
-                        # Premium Alert Format
+                        # Premium Alert Format (God Mode)
                         emoji_alert = "🚀" if change_pct > 0 else "🔻"
                         alert_msg = (
-                            f"🔔 *NEXUS ALERT: {ticker}* {emoji_alert}\n"
-                            f"⏰ {time_str} WIB\n"
+                            f"🔔 *NEXUS FLASH INTELLIGENCE* {emoji_alert}\n"
+                            f"🏢 *{ticker}* | ⏰ {time_str} WIB\n"
                             f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                            f"💵 *IDR {price:,.0f}* ({change_pct:+.2f}%)\n"
-                            f"🔊 Vol: {volume:,.0f}\n"
-                            f"📊 RSI: {rsi:.1f}\n\n"
-                            f"📝 *TRIGGER*: _{reason}_\n"
+                            f"💵 Price : {price:,.0f} ({change_pct:+.2f}%)\n"
+                            f"🔊 Vol   : {volume:,.0f}\n"
+                            f"📊 RSI   : {rsi:.1f}\n\n"
+                            f"⚡ *AI TRIGGER*: _{reason}_\n"
                             f"━━━━━━━━━━━━━━━━━━━━━━"
                         )
                         
@@ -152,39 +152,39 @@ class MarketSessionReporter:
         # 2. Construct Message
         if session_type == 'open':
             msg = (
-                f"🔔 *MARKET OPENING (SESI 1)* 🔔\n"
+                f"� *NEXUS EXECUTIVE BRIEFING: SESSION 1* 🔔\n"
                 f"⏰ {time_str} WIB\n"
                 "━━━━━━━━━━━━━━━━━━━━━━\n"
-                "Selamat pagi Traders! Market IHSG telah dibuka.\n"
-                "Pantau volatilitas awal 15 menit pertama.\n\n"
-                "🔥 *Fokus Pagi Ini*:\n"
-                "Gunakan `/screener` untuk mencari saham yang breakout pagi ini.\n"
-                "Gunakan `/gainers` untuk melihat top movers awal."
+                "Market Opening detected. Volatility scan active.\n"
+                "Sistem memantau anomali volume dan breakout awal.\n\n"
+                "🔥 *ACTION ITEMS*:\n"
+                "• `/screener` : Cari saham breakout pagi.\n"
+                "• `/pulse`    : Cek sentimen pasar (Fear/Greed)."
             )
             
         elif session_type == 'mid':
             # Mid day recap
             top3 = gainers[:3] if gainers else []
             msg = (
-                f"🍱 *RECAP SESI 1 (ISHOMA)* 🍱\n"
+                f"🍱 *NEXUS MID-DAY RECAP* 🍱\n"
                 f"⏰ {time_str} WIB\n"
                 "━━━━━━━━━━━━━━━━━━━━━━\n"
-                "Market istirahat. Berikut highlight sesi 1:\n\n"
-                "🚀 *Top Gainers Watchlist*:\n"
+                "Market Break (Sesi 1 Berakhir). Highlight pagi ini:\n\n"
+                "🚀 *Leading Movers*:\n"
             )
             for s in top3:
                 msg += f"• *{s['ticker']}*: {s['price']:,.0f} (+{s['change_pct']:.1f}%)\n"
                 
-            msg += "\n💡 *Saran*: Review portfolio anda. Siapkan rencana untuk Sesi 2."
+            msg += "\n💡 *Insight*: Siapkan trading plan untuk Sesi 2."
             
         elif session_type == 'open2':
             msg = (
-                f"📢 *MARKET SESI 2 DIMULAI* 📢\n"
+                f"📢 *NEXUS SESSION 2: ACTIVE* ⚡\n"
                 f"⏰ {time_str} WIB\n"
                 "━━━━━━━━━━━━━━━━━━━━━━\n"
-                "Sesi perdagangan terakhir hari ini.\n"
-                "Cek apakah ada saham yang *rebound* atau *lanjut naik*.\n\n"
-                "👉 Cek `/screener` sekarang."
+                "Sesi terakhir dimulai. Fokus pada saham rebound & akumulasi.\n"
+                "Pantau pergerakan Smart Money/Bandar.\n\n"
+                "👉 Gunakan `/flow` untuk deteksi Whale."
             )
             
         elif session_type == 'close':
@@ -193,11 +193,11 @@ class MarketSessionReporter:
             top3_l = losers[:3] if losers else []
             
             msg = (
-                f"🏁 *MARKET CLOSED (FINAL)* 🏁\n"
+                f"🏁 *NEXUS DAILY CLOSING REPORT* 🏁\n"
                 f"⏰ {time_str} WIB\n"
                 "━━━━━━━━━━━━━━━━━━━━━━\n"
-                "Hari perdagangan berakhir. Simpan energi untuk besok!\n\n"
-                "🚀 *Top Performers*:\n"
+                "Perdagangan hari ini ditutup. Berikut ringkasan market:\n\n"
+                "🚀 *Top Gainers*:\n"
             )
             for s in top3_g:
                 msg += f"• *{s['ticker']}*: {s['price']:,.0f} (+{s['change_pct']:.1f}%)\n"
@@ -206,7 +206,7 @@ class MarketSessionReporter:
             for s in top3_l:
                 msg += f"• *{s['ticker']}*: {s['price']:,.0f} ({s['change_pct']:.1f}%)\n"
                 
-            msg += "\n🌅 *Info BSJP*:\nCek saham potensi Beli Sore Jual Pagi dengan `/bsjp`."
+            msg += "\n🌅 *BSJP Candidates*:\nCek potensi cuan besok hari dengan `/bsjp`."
 
         else:
             return
