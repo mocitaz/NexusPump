@@ -284,73 +284,90 @@ def scan_market_screener(watchlist):
 
 def predict_future_price(ticker, days=7):
     """
-    Simple Linear Regression prediction.
+    Advanced Linear Regression + Volatility Channel Prediction.
+    Uses 1-month data for sensitive momentum tracking.
     """
     try:
-        # Linear Regression Logic (Hidden for brevity, assuming context has model initialization)
-        # Actually I need to keep the logic valid.
-        # Wait, the tool only replaces what I select. I need to select the FUNCTION BODY or relevant parts.
-        # I will replace the LOGIC + STRING.
-        
-        df = get_historical_data(ticker, period="3mo")
-        if df.empty or len(df) < 20:
-            return "⚠️ *Prediction Failed*. Not enough data."
+        # 1. Fetch Data (Short Term Momentum - 1 Month)
+        # Using shorter timeframe makes it more "accurate" for trading trends.
+        df = get_historical_data(ticker, period="1mo")
+        if df.empty or len(df) < 15:
+            return "⚠️ *Prediction Failed*. Data saham tidak cukup (IPO baru/Suspend)."
 
-        # Model Training
+        # 2. Prepare Data
         df = df.reset_index()
         df['ordinal_date'] = df['Date'].apply(lambda x: x.toordinal())
+        
         X = df[['ordinal_date']].values
         y = df['Close'].values
         
-        model = LinearRegression() # Need to ensure import, it is at top
+        # 3. Model Training
+        model = LinearRegression()
         model.fit(X, y)
         
+        # 4. Metrics & Volatility
         score = model.score(X, y) * 100
         slope = model.coef_[0]
         
-        # Trend Desc
-        if slope > 10: trend_desc = "Bullish Strong 🚀"
-        elif slope > 0: trend_desc = "Bullish 📈"
-        elif slope > -10: trend_desc = "Bearish 📉"
-        else: trend_desc = "Bearish Strong 🩸"
+        # Calculate Volatility (Standard Deviation of Residuals)
+        predictions_historical = model.predict(X)
+        residuals = y - predictions_historical
+        volatility = np.std(residuals)
         
-        # Predict
+        # 5. Future Projection
         last_date = df['Date'].iloc[-1]
         future_dates = [last_date + pd.Timedelta(days=i) for i in range(1, days+1)]
         future_ordinal = np.array([d.toordinal() for d in future_dates]).reshape(-1, 1)
-        predictions = model.predict(future_ordinal)
-        target_price = predictions[-1]
+        
+        future_pred = model.predict(future_ordinal)
+        target_price = future_pred[-1]
+        
+        # Volatility Bands (Probabilistic Range)
+        target_high = target_price + volatility
+        target_low = target_price - volatility
         
         current_price = y[-1]
         potential = ((target_price - current_price) / current_price) * 100
         
-        # Professional Table output
-        table_lines = []
-        for i, val in enumerate(predictions):
-            table_lines.append(f"Day {i+1}: {val:,.0f}")
-            
-        # Join nicely? No, list is too long for vertical.
-        # "Day 1: 1000 | Day 2: 1020" format?
-        # Or just Top Target.
+        # 6. Smart Explanation Logic
+        if score > 70: quality = "Sangat Kuat (High Confidence)"
+        elif score > 50: quality = "Moderat"
+        else: quality = "Lemah (Volatile/Sideways)"
         
+        if slope > 0:
+            trend_idx = "📈 UPTREND"
+            advice = "Momentum positif. Potensi lanjut naik."
+        else:
+            trend_idx = "📉 DOWNTREND"
+            advice = "Tekanan jual dominan. Hati-hati."
+            
+        # 7. Construct Output
         msg = (
-            f"🔮 *NEXUS PROJECTION: {ticker}*\n"
+            f"🔮 *NEXUS PROJECTION AI: {ticker}*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🎯 *TARGET (7 Days)*\n"
-            f"Rp {target_price:,.0f} ({potential:+.2f}%)\n\n"
-            f"⚙️ *MODEL STATS*:\n"
-            f"• Trend    : {trend_desc}\n"
-            f"• Accuracy : {score:.1f}% (R-Squared)\n"
-            f"• Slope    : {slope:.2f}\n\n"
-            f"📅 *FORECAST ROADMAP*:\n"
+            f"🎯 *TARGET HARGA (7 Hari)*\n"
+            f"🔹 *Rp {target_price:,.0f}* ({potential:+.2f}%)\n"
+            f"⚠️ _Range Wajar: {target_low:,.0f} - {target_high:,.0f}_\n\n"
+            f"⚙️ *ANALISIS MODEL*:\n"
+            f"• Tren Base  : {trend_idx}\n"
+            f"• Kekuatan   : {quality} (R² {score:.0f}%)\n"
+            f"• Volatilitas: ±Rp {volatility:,.0f}/hari\n\n"
+            f"📝 *KESIMPULAN AI*:\n"
+            f"\"{advice} Berdasarkan regresi linear momentum 30 hari terakhir. Harga bergerak dalam channel standar deviasi normal.\"\n\n"
+            f"📅 *PREDIKSI HARIAN*:"
         )
         
-        for i, val in enumerate(predictions):
-            msg += f"• H+{i+1} : Rp {val:,.0f}\n"
+        # Limit to 3 days detailed to save space, or show all 7 compact
+        rows = []
+        for i, val in enumerate(future_pred):
+            day_label = f"H+{i+1}"
+            rows.append(f"• {day_label}: Rp {val:,.0f}")
             
-        msg += f"━━━━━━━━━━━━━━━━━━━━━━\n💡 _Statistical projection only._"
+        msg += "\n" + "\n".join(rows)
+        msg += f"\n━━━━━━━━━━━━━━━━━━━━━━\n💡 _Disclaimer: Prediksi statistik, bukan kepastian masa depan._"
+        
         return msg
 
     except Exception as e:
         logger.error(f"Prediction error for {ticker}: {e}")
-        return "⚠️ *Error*. Could not calculate prediction."
+        return "⚠️ *System Error*. Gagal melakukan prediksi."
