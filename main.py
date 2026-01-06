@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 # --- Configuration ---
 # Replace with your actual values or env vars
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "YOUR_TELEGRAM_BOT_TOKEN")
-CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID", "@your_channel_id")
+CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID", "@nexuspump")
 
 # Global Monitor Instance
 monitor = StockMonitor()
@@ -51,7 +51,7 @@ monitor = StockMonitor()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = (
-        "🤖 *IDX PREMIUM BOT V2*\n"
+        "🤖 *NEXUS PUMP BOT V2*\n"
         "------------------------------\n"
         "/harga <kode> - Harga Live & Data Kunci\n"
         "/chart <kode> - Chart Dark Mode + RSI/MACD\n"
