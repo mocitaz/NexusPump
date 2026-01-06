@@ -86,25 +86,10 @@ def generate_chart(ticker, period="1mo", sup_res_levels=None):
                 'text.color': '#e0e0e0', 'axes.labelcolor': '#e0e0e0', 'xtick.color': '#808080', 'ytick.color': '#808080'}
         )
         
-        # 6. S/R Lines Logic
-        hlines_dict = dict(hlines=[], colors=[], linestyle='-.', linewidths=0.8)
-        if sup_res_levels:
-            # We want to filter levels that are within the plot range (optional, mpf handles it but better to be safe)
-            # Just pass them all, mpf is smart.
-            hlines_dict['hlines'] = sup_res_levels
-            # Color logic: Green for below price (Support), Red for above (Resistance)?
-            # Or just white/grey dashed lines for all.
-            # Let's use Cyan/Yellow for visibility.
-            hlines_dict['colors'] = ['#ffffff'] * len(sup_res_levels)
-        
-        # If no levels, remove the arg or pass empty
-        if not hlines_dict['hlines']:
-            hlines_dict = None
-
+        # 6. Prepare Plot Arguments
         buf = io.BytesIO()
         
-        mpf.plot(
-            df_plot,
+        plot_kwargs = dict(
             type='candle',
             volume=True,
             addplot=addplots,
@@ -114,9 +99,20 @@ def generate_chart(ticker, period="1mo", sup_res_levels=None):
             datetime_format='%d-%b',
             tight_layout=True,
             scale_width_adjustment=dict(volume=0.7, candle=1.2),
-            savefig=dict(fname=buf, dpi=120, bbox_inches='tight', facecolor='#0a0a0a'),
-            hlines=hlines_dict
+            savefig=dict(fname=buf, dpi=120, bbox_inches='tight', facecolor='#0a0a0a')
         )
+        
+        # Add S/R Lines ONLY if valid
+        if sup_res_levels:
+            hlines_dict = dict(
+                hlines=sup_res_levels, 
+                colors=['#ffffff'] * len(sup_res_levels), 
+                linestyle='-.', 
+                linewidths=0.8
+            )
+            plot_kwargs['hlines'] = hlines_dict
+
+        mpf.plot(df_plot, **plot_kwargs)
         
         buf.seek(0)
         return buf
