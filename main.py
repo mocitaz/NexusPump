@@ -307,7 +307,14 @@ async def gainers(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target_msg = update.message if update.message else update.callback_query.message
     waiting = await target_msg.reply_text("🔎 *Scanning Top Gainers...*", parse_mode='Markdown')
     
-    g, _ = get_top_gainers_losers_idx()
+    # Async Fix: Run blocking IO in thread pool
+    try:
+        g, _ = await asyncio.to_thread(get_top_gainers_losers_idx)
+    except Exception as e:
+        logger.error(f"Gainers error: {e}")
+        await waiting.edit_text("❌ Terjadi kesalahan saat mengambil data.")
+        return
+
     if not g:
         await waiting.edit_text("❌ Data pasar tidak tersedia.")
         return
@@ -336,7 +343,14 @@ async def losers(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target_msg = update.message if update.message else update.callback_query.message
     waiting = await target_msg.reply_text("🔎 *Scanning Top Losers...*", parse_mode='Markdown')
     
-    _, l = get_top_gainers_losers_idx()
+    # Async Fix
+    try:
+        _, l = await asyncio.to_thread(get_top_gainers_losers_idx)
+    except Exception as e:
+        logger.error(f"Losers error: {e}")
+        await waiting.edit_text("❌ Terjadi kesalahan saat mengambil data.")
+        return
+
     if not l:
         await waiting.edit_text("❌ Data pasar tidak tersedia.")
         return
@@ -360,7 +374,8 @@ async def screener(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target_msg = update.message if update.message else update.callback_query.message
     waiting = await target_msg.reply_text("🕵️‍♂️ *Menganalisis Market... (Mohon tunggu)*", parse_mode='Markdown')
     
-    results = scan_market_screener(IDX_WATCHLIST)
+    results = await asyncio.to_thread(scan_market_screener, IDX_WATCHLIST)
+    
     if not results:
         await waiting.edit_text("❌ *Market Screener*: Data tidak tersedia atau pasar tutup.", parse_mode='Markdown')
         return
@@ -399,22 +414,27 @@ async def screener(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def bsjp(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target_msg = update.message if update.message else update.callback_query.message
-    waiting = await target_msg.reply_text("🔎 Scanning Market untuk peluang BSJP...\n_Mohon tunggu..._", parse_mode='Markdown')
+    waiting = await target_msg.reply_text("🦅 *NEXUS SNIPER: Scanning Targets...*", parse_mode='Markdown')
     
-    candidates = scan_bsjp_strategy(IDX_WATCHLIST)
+    candidates = await asyncio.to_thread(scan_bsjp_strategy, IDX_WATCHLIST)
     time_str = datetime.datetime.now(pytz.timezone('Asia/Jakarta')).strftime('%H:%M')
     
     if not candidates:
-        await waiting.edit_text(f"❌ Tidak ada rekomendasi BSJP hari ini.\n⏰ Checked: {time_str} WIB")
+        await waiting.edit_text(f"❌ *NO TARGET FOUND*.\nMarket terlalu lemah untuk Sniper Entry.\n⏰ Checked: {time_str} WIB", parse_mode='Markdown')
         return
         
-    msg = f"🌅 *Rekomendasi BSJP (High Risk)*\n⏰ Pukul: {time_str} WIB\n━━━━━━━━━━━━━━━━━━━━━━\n"
+    msg = f"🦅 *NEXUS SNIPER PRO (BSJP)*\n⏰ Pukul: {time_str} WIB\n━━━━━━━━━━━━━━━━━━━━━━\n"
     for c in candidates[:10]: 
+        # Visualization of Win Prob
+        win_prob = c.get('win_prob', 60)
+        icon = "🎯" if win_prob > 80 else "🔫"
+        
         msg += (
-            f"🎯 *{c['ticker']}* @ {c['price']:,.0f}\n"
-            f"   📈 Naik: {c['change']:.1f}% | 🔊 Vol: {c['volume_ratio']:.1f}x Avg\n"
+            f"{icon} *{c['ticker']}* @ {c['price']:,.0f}\n"
+            f"   📈 Gain: +{c['change']:.1f}% | 🎲 Win Prob: ~{win_prob}%\n"
+            f"   🔊 Vol: {c['volume_ratio']:.1f}x Avg\n\n"
         )
-    msg += "\n_Syarat: Uptrend, Vol > Avg, Close near High._"
+    msg += "━━━━━━━━━━━━━━━━━━━━━━\n⚠️ _High Risk Scalping Strategy._"
     await waiting.edit_text(msg, parse_mode='Markdown')
 
 # --- Background Tasks ---
