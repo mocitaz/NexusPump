@@ -19,13 +19,14 @@ async def bsjp(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🔎 Scanning Market untuk peluang BSJP (Beli Sore Jual Pagi)...\n_Mohon tunggu, memproses data 70+ saham..._")
     
     candidates = scan_bsjp_strategy(IDX_WATCHLIST)
+    time_str = datetime.datetime.now(pytz.timezone('Asia/Jakarta')).strftime('%H:%M')
     
     if not candidates:
-        await update.message.reply_text("❌ Tidak ada saham yang memenuhi kriteria BSJP hari ini (Market mungkin bearish/sideways).")
+        await update.message.reply_text(f"❌ Tidak ada rekomendasi BSJP hari ini.\n⏰ Checked: {time_str} WIB")
         return
         
-    msg = "🌅 *Rekomendasi BSJP (High Risk)*\n\n"
-    for c in candidates[:10]: # Top 10 only
+    msg = f"🌅 *Rekomendasi BSJP (High Risk)*\n⏰ Pukul: {time_str} WIB\n━━━━━━━━━━━━━━━━━━━━━━\n"
+    for c in candidates[:10]: 
         msg += (
             f"🎯 *{c['ticker']}* @ {c['price']:,.0f}\n"
             f"   📈 Naik: {c['change']:.1f}% | 🔊 Vol: {c['volume_ratio']:.1f}x Avg\n"
@@ -33,6 +34,24 @@ async def bsjp(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     msg += "\n_Syarat: Uptrend, Vol > Avg, Close near High._\n_DYOR! Not Financial Advice._"
     await update.message.reply_text(msg, parse_mode='Markdown')
+
+# ...
+
+async def predict(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not context.args:
+        await update.message.reply_text("⛔ Gunakan format: `/predict <kode>`", parse_mode='Markdown')
+        return
+        
+    ticker = context.args[0].upper()
+    await update.message.reply_text(f"🔮 *Simulasi Prediksi Harga {ticker}...*", parse_mode='Markdown')
+    
+    res = predict_future_price(ticker)
+    
+    # Append timestamp
+    time_str = datetime.datetime.now(pytz.timezone('Asia/Jakarta')).strftime('%H:%M')
+    res += f"\n\n⏰ Generated: {time_str} WIB"
+    
+    await update.message.reply_text(res, parse_mode='Markdown')
 
 
 logging.basicConfig(
