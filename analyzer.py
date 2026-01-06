@@ -429,7 +429,8 @@ def scan_sector_performance():
     try:
         # Batch Fetch 2d is enough for calculating change (Previous Close vs Last Close)
         # Optimized for speed.
-        df = yf.download(tickers_idx, period="2d", interval="1d", group_by='column', progress=False, threads=False, actions=False)
+        # Use group_by='ticker' to access via df['Ticker']['Close'] or df['Ticker']
+        df = yf.download(tickers_idx, period="2d", interval="1d", group_by='ticker', progress=False, threads=False, actions=False)
         if df.empty: return []
         
         sector_perf = []
