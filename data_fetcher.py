@@ -4,43 +4,67 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-def get_stock_price(ticker):
+def get_stock_price(ticker, detailed=False):
     """
-    Fetches the current price, change %, high, low, and volume for a ticker.
+    Fetches price + fundamentals. 
+    detailed=True: Fetches 1m interval for exact Last Trade Time (Slower).
     """
     try:
-        # Ensure ticker has .JK suffix if not present (assuming IDX)
         if not ticker.endswith(".JK") and not ticker.endswith(".jk"):
             ticker = f"{ticker}.JK"
         
         stock = yf.Ticker(ticker)
-        # fast_info is often faster for current price
-        info = stock.fast_info
         
+        # 1. Fast Info (Price)
+        info = stock.fast_info
         last_price = info.last_price
         prev_close = info.previous_close
         
-        if last_price is None or prev_close is None:
-            # Fallback to history if fast_info fails (sometimes happens on weak connections)
+        if last_price is None:
+            # Fallback
             hist = stock.history(period="1d")
-            if hist.empty:
-                return None
+            if hist.empty: return None
             last_price = hist["Close"].iloc[-1]
-            prev_close = stock.info.get("previousClose", last_price) # Fallback
+            prev_close = stock.info.get("previousClose", last_price)
 
         change = last_price - prev_close
         change_pct = (change / prev_close) * 100
         
-        # Get day's range and volume from history for accuracy (fast_info doesn't always have dayHigh/Low accurate during session)
-        hist_today = stock.history(period="1d")
-        if not hist_today.empty:
-            high = hist_today["High"].iloc[-1]
-            low = hist_today["Low"].iloc[-1]
-            volume = hist_today["Volume"].iloc[-1]
+        # 2. Fundamentals (Lazy load from stock.info if needed, but fast_info is limited)
+        # We need stock.info for mcap/sector usually.
+        # Optimized: Only fetch if critical? No, /harga needs it.
+        # But stock.info is slow.
+        # Let's try to get what we can.
+        
+        # Note: stock.info triggers a request
+        base_info = stock.info
+        
+        long_name = base_info.get('longName', ticker)
+        sector = base_info.get('sector', 'Unknown')
+        market_cap = base_info.get('marketCap', 0)
+        pe_ratio = base_info.get('trailingPE', None)
+        
+        # 3. Detailed Mode (Time & Volume)
+        last_updated_str = "N/A"
+        
+        if detailed:
+            hist_intraday = stock.history(period="1d", interval="1m")
+            if not hist_intraday.empty:
+                high = hist_intraday["High"].max()
+                low = hist_intraday["Low"].min()
+                volume = hist_intraday["Volume"].sum()
+                last_ts = hist_intraday.index[-1]
+                last_updated_str = last_ts.strftime('%H:%M')
+            else:
+                high = info.day_high if info.day_high else last_price
+                low = info.day_low if info.day_low else last_price
+                volume = info.last_volume
+                last_updated_str = "End of Day"
         else:
-            high = last_price
-            low = last_price
-            volume = 0
+            # Fast Mode
+            high = info.day_high if info.day_high else last_price
+            low = info.day_low if info.day_low else last_price
+            volume = info.last_volume
 
         return {
             "ticker": ticker.upper(),
@@ -49,7 +73,12 @@ def get_stock_price(ticker):
             "change_pct": change_pct,
             "high": high,
             "low": low,
-            "volume": volume
+            "volume": volume,
+            "last_updated": last_updated_str,
+            "long_name": long_name,
+            "sector": sector,
+            "market_cap": market_cap,
+            "pe_ratio": pe_ratio
         }
     except Exception as e:
         logger.error(f"Error fetching price for {ticker}: {e}")
