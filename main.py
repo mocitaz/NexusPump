@@ -34,10 +34,17 @@ portfolio_db = PortfolioManager()
 def get_common_keyboard(ticker):
     """
     Returns the standard Navigation Keyboard for a ticker.
+    Includes Timeframe Buttons for Chart.
     """
     keyboard = [
         [
-            InlineKeyboardButton("📊 Chart", callback_data=f"CHART:{ticker}"),
+            InlineKeyboardButton("1W", callback_data=f"CHART:{ticker}:1wk"),
+            InlineKeyboardButton("1M", callback_data=f"CHART:{ticker}:1mo"),
+            InlineKeyboardButton("3M", callback_data=f"CHART:{ticker}:3mo"),
+            InlineKeyboardButton("1Y", callback_data=f"CHART:{ticker}:1y"),
+        ],
+        [
+            InlineKeyboardButton("📊 Chart Default", callback_data=f"CHART:{ticker}:1mo"),
             InlineKeyboardButton("🧠 Analisa", callback_data=f"ANALYSIS:{ticker}"),
         ],
         [
@@ -548,6 +555,11 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Inject args so functions know what to do
     context.args = [ticker]
     
+    # Handle Chart Period if present
+    if cmd == "CHART" and len(data) > 2:
+        period = data[2]
+        context.args.append(period)
+
     # Route
     if cmd == "CHART":
         await chart(update, context)
