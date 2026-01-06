@@ -201,3 +201,32 @@ def get_top_gainers_losers_idx():
     except Exception as e:
         logger.error(f"Error in batch scan gainers/losers: {e}")
         return [], []
+
+def get_stock_fundamentals(ticker):
+    """
+    Fetches fundamental data (Investor View).
+    (PER, PBV, ROE, MarketCap, DividendYield).
+    Note: 'info' request is slower than fast_info.
+    """
+    try:
+        if not ticker.endswith(".JK") and not ticker.endswith(".jk"):
+            ticker = f"{ticker}.JK"
+            
+        stock = yf.Ticker(ticker)
+        info = stock.info
+        
+        # Extract safe values
+        data = {
+            "pe_ratio": info.get("trailingPE", 0),
+            "pbv_ratio": info.get("priceToBook", 0),
+            "roe": info.get("returnOnEquity", 0),
+            "market_cap": info.get("marketCap", 0),
+            "dividend_yield": info.get("dividendYield", 0),
+            "sector": info.get("sector", "Unknown"),
+            "industry": info.get("industry", "-"),
+            "currency": info.get("currency", "IDR")
+        }
+        return data
+    except Exception as e:
+        logger.error(f"Error fetching fundamentals for {ticker}: {e}")
+        return None

@@ -7,7 +7,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, CallbackQueryHandler, MessageHandler, filters
 
 # Modules
-from data_fetcher import get_stock_price, get_top_gainers_losers_idx, get_stock_news
+from data_fetcher import get_stock_price, get_top_gainers_losers_idx, get_stock_news, get_stock_fundamentals
 from chart_generator import generate_chart
 from analyzer import analyze_stock, predict_future_price, scan_bsjp_strategy, scan_market_screener, scan_whale_flow, scan_top_picks, scan_sector_performance
 from market_pulse import calculate_market_mood, generate_gauge_chart
@@ -99,18 +99,46 @@ async def harga(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Determines where to reply
     message_source = update.message if update.message else update.callback_query.message
     
-    waiting_msg = await message_source.reply_text(f"🔄 *Fetching Live Data {ticker}...* (Wait)", parse_mode='Markdown')
+    waiting_msg = await message_source.reply_text(f"⏳ *Accessing Exchange Data {ticker}...*", parse_mode='Markdown')
     
-    data = get_stock_price(ticker, detailed=True)
+    msg_id = waiting_msg.message_id
+    chat_id = waiting_msg.chat_id
+    
+    # Simple Animation Logic
+    try:
+        await asyncio.to_thread(asyncio.sleep, 0.5) 
+        # Optional: Edit message to show progress
+        if hasattr(context.bot, 'edit_message_text'):
+             await context.bot.edit_message_text(chat_id=chat_id, message_id=msg_id, text=f"🔍 *Analyzing Fundamentals {ticker}...*", parse_mode='Markdown')
+    except: pass
+
+    # Fetch Data Parallel
+    # Pricing is fast, Fundamentals (info) is slower
+    data = await asyncio.to_thread(get_stock_price, ticker, detailed=True)
+    fund = await asyncio.to_thread(get_stock_fundamentals, ticker)
     
     if data:
         emoji = "🚀" if data['change'] >= 0 else "🔻"
         color_indicator = "🟢 BULLISH" if data['change'] >= 0 else "🔴 BEARISH"
         
-        mcap = data.get('market_cap', 0)
-        if mcap >= 1_000_000_000_000: mcap_str = f"{mcap/1_000_000_000_000:.2f} T"
-        elif mcap >= 1_000_000_000: mcap_str = f"{mcap/1_000_000_000:.0f} M"
-        else: mcap_str = f"{mcap:,.0f}"
+        # Fundamentals formatting
+        pe = "N/A"
+        pbv = "N/A"
+        roe = "N/A"
+        div = "N/A"
+        mcap_val = data.get('market_cap', 0)
+
+        if fund:
+             pe = f"{fund['pe_ratio']:.2f}x" if fund['pe_ratio'] else "N/A"
+             pbv = f"{fund['pbv_ratio']:.2f}x" if fund['pbv_ratio'] else "N/A"
+             roe = f"{fund['roe']*100:.2f}%" if fund['roe'] else "N/A"
+             div = f"{fund['dividend_yield']*100:.2f}%" if fund['dividend_yield'] else "N/A"
+             # Use fundamental mcap if available and valid
+             if fund['market_cap'] > 0: mcap_val = fund['market_cap']
+
+        if mcap_val >= 1_000_000_000_000: mcap_str = f"{mcap_val/1_000_000_000_000:.2f} T"
+        elif mcap_val >= 1_000_000_000: mcap_str = f"{mcap_val/1_000_000_000:.0f} M"
+        else: mcap_str = f"{mcap_val:,.0f}"
 
         last_upd = data.get('last_updated', 'N/A')
         
@@ -125,9 +153,12 @@ async def harga(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"• Vol     : {data['volume']:,.0f}\n"
             f"• Range   : {data['low']:,.0f} - {data['high']:,.0f}\n"
             f"• Updated : {last_upd} WIB ⏰\n\n"
-            f"💎 *FUNDAMENTAL*:\n"
+            f"💎 *INVESTOR VIEW*:\n"
             f"• M.Cap   : Rp {mcap_str}\n"
-            f"• PER     : {data.get('pe_ratio', 'N/A') if data.get('pe_ratio') else 'N/A'}\n"
+            f"• PER Ratio  : {pe}\n"
+            f"• PBV Ratio  : {pbv}\n"
+            f"• ROE        : {roe}\n"
+            f"• Div Yield  : {div}\n"
             f"━━━━━━━━━━━━━━━━━━━━━━"
         )
         
@@ -290,7 +321,15 @@ async def flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def sectors(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target_msg = update.message if update.message else update.callback_query.message
-    waiting = await target_msg.reply_text("🗺️ *Scanning Sector Map...*", parse_mode='Markdown')
+    waiting = await target_msg.reply_text("⏳ *Initializing Radar...*", parse_mode='Markdown')
+    
+    msg_id = waiting.message_id
+    chat_id = waiting.chat_id
+    try:
+         await asyncio.sleep(0.5)
+         if hasattr(context.bot, 'edit_message_text'):
+             await context.bot.edit_message_text(chat_id=chat_id, message_id=msg_id, text="🗺️ *Scanning Sector Map...*", parse_mode='Markdown')
+    except: pass
 
     try:
         data = await asyncio.wait_for(
@@ -570,7 +609,15 @@ async def losers(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def screener(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target_msg = update.message if update.message else update.callback_query.message
-    waiting = await target_msg.reply_text("🕵️‍♂️ *Menganalisis Market... (Mohon tunggu)*", parse_mode='Markdown')
+    waiting = await target_msg.reply_text("⏳ *Scanning Market Data...*", parse_mode='Markdown')
+
+    msg_id = waiting.message_id
+    chat_id = waiting.chat_id
+    try:
+         await asyncio.sleep(0.5)
+         if hasattr(context.bot, 'edit_message_text'):
+             await context.bot.edit_message_text(chat_id=chat_id, message_id=msg_id, text="🕵️‍♂️ *Filtering Top Potential...*", parse_mode='Markdown')
+    except: pass
     
     results = await asyncio.to_thread(scan_market_screener, IDX_WATCHLIST)
     
