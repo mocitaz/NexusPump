@@ -73,13 +73,21 @@ class StockMonitor:
                         reason = f"⚡ PERGERAKAN SIGNIFIKAN (>3%, RSI {rsi:.1f})"
 
                     if is_alert:
+                        # Premium Alert Format
+                        emoji_alert = "🚀" if change_pct > 0 else "🔻"
                         alert_msg = (
+                            f"🔔 *NEXUS SIGNAL ALERT* {emoji_alert}\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━━━\n"
+                            f"💎 *{ticker}* (IDX)\n\n"
+                            f"💵 *Harga*: Rp {price:,.0f}\n"
+                            f"📈 *Kenaikan*: +{change_pct:.2f}%\n"
+                            f"🔊 *Volume*: {volume:,.0f} (High Activity)\n"
+                            f"📊 *RSI (14)*: {rsi:.1f}\n\n"
+                            f"📝 *Analisis Singkat*:\n"
                             f"{reason}\n\n"
-                            f"*{ticker}* Rp {price:,.0f}\n"
-                            f"Naik: +{change_pct:.2f}%\n"
-                            f"Volume: {volume:,.0f}\n"
-                            f"RSI: {rsi:.1f}\n\n"
-                            f"_Cek detail: /analisa {ticker}_"
+                            f"👉 *Action*: Cek chart & fundamental sekarang!\n"
+                            f"Generate Chart: `/chart {ticker}`\n"
+                            f"Analisis AI: `/analisa {ticker}`"
                         )
                         alerts.append(alert_msg)
             

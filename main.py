@@ -5,7 +5,7 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler
 from data_fetcher import get_stock_price, get_top_gainers_losers_idx
 from chart_generator import generate_chart
-from analyzer import analyze_stock, predict_future_price, scan_bsjp_strategy
+from analyzer import analyze_stock, predict_future_price, scan_bsjp_strategy, scan_market_screener
 from idx_tickers import IDX_WATCHLIST
 from alerts import StockMonitor
 
@@ -52,21 +52,53 @@ monitor = StockMonitor()
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user.first_name
     help_text = (
-        f"👋 *Halo, {user}! Selamat datang di Nexus Pump.*\n\n"
-        "Saya adalah asisten investasi profesional Anda. Berikut layanan yang tersedia:\n\n"
-        "📊 *INFORMASI PASAR*\n"
-        "• `/harga <kode>` - Data detil (Fundamental & Teknikal)\n"
-        "• `/chart <kode>` - Chart Professional (MA, RSI, MACD)\n"
-        "• `/news <kode>` - Berita & Sentimen Terkini\n\n"
-        "🧠 *ANALISIS CERDAS*\n"
-        "• `/analisa <kode>` - Sinyal AI & Pivot Points\n"
-        "• `/predict <kode>` - Proyeksi Harga & Alasan Statistik\n\n"
-        "🚀 *TOP MOVERS*\n"
-        "• `/gainers` - Saham Paling Untung Hari Ini\n"
-        "• `/losers` - Saham Paling Rugi Hari Ini\n\n"
-        "_💡 Tips: Gunakan bot ini sebagai referensi kedua. Keputusan jual/beli tetap di tangan Anda._"
+        f"👋 *Halo, {user}! Selamat datang di Nexus Pump - Professional Trading Assistant.*\n"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        "Fitur Utama & Cara Penggunaan:\n\n"
+        "🔍 *MARKET SCREENER* (Baru!)\n"
+        "• `/screener` - Pindai pasar untuk mencari saham potensial (Data, Akumulasi Bandar, Safety).\n"
+        "• `/gainers` - Top Gainers hari ini.\n\n"
+        "📊 *DEEP ANALYSIS*\n"
+        "• `/analisa <kode>` - Analisis AI, Pivot Point, Sinyal & Indikator Lengkap.\n"
+        "• `/chart <kode>` - Chart Professional (MA, RSI, MACD).\n"
+        "• `/predict <kode>` - Proyeksi harga 7 hari kedepan dengan alasan statistik.\n\n"
+        "ℹ️ *FUNDAMENTAL INFO*\n"
+        "• `/harga <kode>` - Data harga, Market Cap, PE, dan Sektor.\n"
+        "• `/news <kode>` - Berita terkini untuk sentimen pasar.\n\n"
+        "_Tip: Cobalah fitur /screener setiap pagi/sore untuk melihat potensi market._"
     )
     await update.message.reply_text(help_text, parse_mode='Markdown')
+
+async def screener(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🕵️‍♂️ *Running Market Screener...*\n_Memproses indikator Bandar & Volatilitas..._", parse_mode='Markdown')
+    
+    results = scan_market_screener(IDX_WATCHLIST)
+    if not results:
+        await update.message.reply_text("❌ Tidak ada data yang tersedia/Pasar tutup.")
+        return
+        
+    # Create Table
+    msg = "📟 *NEXUS MARKET SCREENER* 📟\n"
+    msg += f"📅 Data: {results[0]['date']}\n"
+    msg += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    msg += "`Kode  | Harga  | Potensi | Bandar | Safety`\n"
+    msg += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    
+    # Show Top 15
+    for r in results[:15]:
+        # Truncate for formatting
+        ticker = f"{r['ticker']:<5}"
+        price = f"{r['price']:<6,.0f}"
+        pot = f"+{r['potential']:<4.1f}%"
+        bandar = "🐳" if "AKUM" in r['bandar'] else "🔻" if "DIST" in r['bandar'] else "➖"
+        safe = "✅" if "AMAN" in r['bsjp'] else "⚠️"
+        
+        msg += f"`{ticker} {price} {pot}  {bandar}    {safe}`\n"
+        
+    msg += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    msg += "_Ket: Potensi (Jarak ke R1), Bandar (Vol Flow), Safety (Volatilitas)_"
+    
+    await update.message.reply_text(msg, parse_mode='Markdown')
 
 async def harga(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
@@ -227,6 +259,7 @@ if __name__ == '__main__':
     application.add_handler(CommandHandler('predict', predict))
     application.add_handler(CommandHandler('gainers', gainers))
     application.add_handler(CommandHandler('losers', losers))
+    application.add_handler(CommandHandler('screener', screener))
     
     # Setup JobQueue for background alerts
     job_queue = application.job_queue
