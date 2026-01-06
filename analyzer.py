@@ -331,3 +331,61 @@ def predict_future_price(ticker, days=7):
     except Exception as e:
         logger.error(f"Prediction error for {ticker}: {e}")
         return "⚠️ *System Error*. Gagal melakukan prediksi."
+
+def scan_whale_flow(watchlist):
+    """
+    V21 NEXUS FLOW: WHALE / BANDARMOLOGY SCANNER
+    Detects:
+    1. Silent Accumulation (Price Stable, Vol High)
+    2. Golden Flow (Price Up, Vol Exploding)
+    """
+    from data_fetcher import get_historical_data
+    results = []
+    
+    for ticker in watchlist:
+        try:
+            # Need strict 20 days for Avg Vol
+            df = get_historical_data(ticker, period="1mo")
+            if df.empty or len(df) < 20: continue
+            
+            last = df.iloc[-1]
+            avg_vol = df['Volume'].rolling(20).mean().iloc[-1]
+            
+            # Avoid division by zero
+            if avg_vol == 0: continue
+            
+            vol_ratio = last['Volume'] / avg_vol
+            price_change = ((last['Close'] - df.iloc[-2]['Close']) / df.iloc[-2]['Close']) * 100
+            
+            signal = None
+            confidence = 0
+            
+            # Logic 1: Silent Accumulation (The dangerous one)
+            # Price sideway (-1% to +2%) BUT Volume massive (> 2x)
+            if (-1.0 <= price_change <= 2.0) and (vol_ratio > 2.0):
+                signal = "SILENT ACCUMULATION 🤫"
+                confidence = min(99, vol_ratio * 20) # 2x vol = 40%, 5x = 100%
+                desc = "Harga stabil tapi volume meledak. Indikasi Smart Money entry diam-diam."
+                
+            # Logic 2: Golden Flow (Confirmation)
+            # Price breakout (> 3%) AND Volume massive (> 2.5x)
+            elif (price_change > 3.0) and (vol_ratio > 2.5):
+                signal = "GOLDEN FLOW (WHALE ENTRY) 🐳"
+                confidence = min(99, vol_ratio * 15 + price_change * 2)
+                desc = "Ledakan volume disertai kenaikan harga signifikan."
+                
+            if signal:
+                results.append({
+                    "ticker": ticker,
+                    "signal": signal,
+                    "vol_ratio": vol_ratio,
+                    "change": price_change,
+                    "desc": desc
+                })
+                
+        except Exception:
+            continue
+            
+    # Sort by Vol Ratio (Highest Abnormal Volume first)
+    results.sort(key=lambda x: x['vol_ratio'], reverse=True)
+    return results

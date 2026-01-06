@@ -5,7 +5,8 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, CallbackQueryHandler, MessageHandler, filters
 from data_fetcher import get_stock_price, get_top_gainers_losers_idx, get_stock_news
 from chart_generator import generate_chart
-from analyzer import analyze_stock, predict_future_price, scan_bsjp_strategy, scan_market_screener
+from analyzer import analyze_stock, predict_future_price, scan_bsjp_strategy, scan_market_screener, scan_whale_flow
+from market_pulse import calculate_market_mood, generate_gauge_chart
 from idx_tickers import IDX_WATCHLIST
 from alerts import StockMonitor, MarketSessionReporter
 import datetime
@@ -55,21 +56,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Saya adalah asisten pasar modal pribadi Anda.\n"
         "Gunakan perintah di bawah untuk analisa mendalam:\n\n"
         "🔍 *MARKET TOOLS*\n"
-        "• `/screener` : Pindai saham potensial (Bandar & Safety).\n"
-        "• `/gainers`  : Top 5 Saham Paling Cuan Hari Ini.\n"
+        "• `/pulse`    : Indikator Fear & Greed Market (Gauge).\n"
+        "• `/screener` : Pindai saham potensial (V16).\n"
+        "• `/flow`     : Scan Bandar Flow & Whale Accumulation (V21).\n"
+        "• `/gainers`  : Top 5 Saham Paling Cuan.\n"
         "• `/losers`   : Top 5 Saham Paling Boncos.\n\n"
         "📊 *DEEP DIVE*\n"
         "• `/analisa <kode>` : Analisis AI, Sinyal, & Pivot.\n"
-        "• `/chart <kode>`   : Chart Professional (MA + Volume).\n"
-        "• `/predict <kode>` : Proyeksi Harga 7 Hari.\n"
+        "• `/chart <kode>`   : Chart Professional (Neon Dark).\n"
+        "• `/predict <kode>` : Proyeksi Harga 7 Hari (AI).\n"
         "• `/news <kode>`    : Sentimen Berita Terkini.\n"
         "• `/harga <kode>`   : Data Fundamental & Valuasi.\n\n"
         "━━━━━━━━━━━━━━━━━━━━━━\n"
         "💡 _Tip: Klik tombol pada pesan balasan untuk navigasi cepat._"
     )
     await update.message.reply_text(help_text, parse_mode='Markdown')
-
-# ...
 
 async def harga(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Support direct call or callback context override
@@ -217,6 +218,63 @@ async def predict(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kb = get_common_keyboard(ticker)
     await waiting_msg.edit_text(res, parse_mode='Markdown', reply_markup=kb)
 
+async def pulse(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    target_msg = update.message if update.message else update.callback_query.message
+    status_msg = await target_msg.reply_text("🩺 *Mendiagnosa Market Mood (Big Caps)...*", parse_mode='Markdown')
+    
+    score, desc = calculate_market_mood()
+    img_buf = generate_gauge_chart(score)
+    
+    if img_buf:
+        time_str = datetime.datetime.now(pytz.timezone('Asia/Jakarta')).strftime('%H:%M')
+        await status_msg.delete()
+        await target_msg.reply_photo(
+            photo=img_buf,
+            caption=(
+                f"🩺 *NEXUS MARKET PULSE*\n"
+                f"⏰ {time_str} WIB\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"{desc}\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "💡 _Indeks ini mengukur psikologi pasar berdasarkan Tren & Breadth saham Big Caps._"
+            ),
+            parse_mode='Markdown'
+        )
+    else:
+        await status_msg.edit_text("❌ Gagal membuat visualisasi Market Pulse.")
+
+async def flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    target_msg = update.message if update.message else update.callback_query.message
+    waiting = await target_msg.reply_text("🐳 *Scanning Whale Flow (Bandarmology)...*", parse_mode='Markdown')
+    
+    results = scan_whale_flow(IDX_WATCHLIST)
+    
+    if not results:
+        await waiting.edit_text("🤷‍♂️ *Market Sepi*. Tidak ada aktivitas Whale/Bandar yang mencolok saat ini.", parse_mode='Markdown')
+        return
+        
+    msg = "🕵️‍♂️ *NEXUS FLOW (WHALE RADAR)*\n━━━━━━━━━━━━━━━━━━━━━━\n"
+    count = 0
+    for r in results[:10]:
+        ticker = r['ticker']
+        sig = r['signal']
+        vol = r['vol_ratio']
+        chg = r['change']
+        
+        # Icon logic
+        icon = "🤫" if "SILENT" in sig else "🐳"
+        
+        msg += (
+            f"{icon} *{ticker}* ({chg:+.1f}%)\n"
+            f"   📊 Volume: {vol:.1f}x Avg\n"
+            f"   🚨 *{sig}*\n"
+            f"   _{r['desc']}_\n\n"
+        )
+        count += 1
+        
+    msg += "━━━━━━━━━━━━━━━━━━━━━━\n💡 _Radar mendeteksi anomali volume dan aktivitas Smart Money._"
+    await waiting.edit_text(msg, parse_mode='Markdown')
+
 # --- Button Callback Handler ---
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -272,8 +330,6 @@ async def gainers(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"```\n{chr(10).join(lines)}\n```\n"
         "_Delay data 15 menit_"
     )
-    # We can add a refresh button or check details for top 1?
-    # For now keep simple.
     await waiting.edit_text(msg, parse_mode='Markdown')
 
 async def losers(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -402,7 +458,7 @@ async def market_alert_job(context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 logger.error(f"Failed to send alert: {e}")
 
-# ... Session reporters (unchanged) ...
+# ... Session reporters ...
 async def session_open(context: ContextTypes.DEFAULT_TYPE):
     reporter = MarketSessionReporter(context.application)
     await reporter.send_report(context, 'open')
@@ -424,11 +480,10 @@ async def channel_command_dispatcher(update: Update, context: ContextTypes.DEFAU
     command = parts[0].lower().split('@')[0].replace('/', '')
     args = parts[1:]
     context.args = args
-    # ... logic same as before ... using map
     cmd_map = {
         'start': start, 'harga': harga, 'chart': chart, 'analisa': analisa,
         'news': news, 'predict': predict, 'screener': screener, 'bsjp': bsjp,
-        'gainers': gainers, 'losers': losers
+        'gainers': gainers, 'losers': losers, 'pulse': pulse, 'flow': flow
     }
     if command in cmd_map:
         await cmd_map[command](update, context)
@@ -450,6 +505,8 @@ if __name__ == '__main__':
     application.add_handler(CommandHandler('gainers', gainers))
     application.add_handler(CommandHandler('losers', losers))
     application.add_handler(CommandHandler('screener', screener))
+    application.add_handler(CommandHandler('pulse', pulse))
+    application.add_handler(CommandHandler('flow', flow))
     
     # CALLBACK HANDLER (The New V14 Core)
     application.add_handler(CallbackQueryHandler(button_callback))
@@ -469,5 +526,5 @@ if __name__ == '__main__':
     job_queue.run_daily(session_open2, time=datetime.time(hour=13, minute=30, tzinfo=tz_jkt), days=weekdays)
     job_queue.run_daily(session_close, time=datetime.time(hour=16, minute=0, tzinfo=tz_jkt), days=weekdays)
     
-    print("--- NEXUS PUMP BOT V14 (Inline Buttons) STARTING ---")
+    print("--- NEXUS PUMP BOT V19-V21 STARTING ---")
     application.run_polling()
