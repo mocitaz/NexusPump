@@ -742,11 +742,38 @@ async def channel_command_dispatcher(update: Update, context: ContextTypes.DEFAU
     if command in cmd_map:
         await cmd_map[command](update, context)
 
+async def post_init(application):
+    """
+    Set up the bot's command menu automatically on startup.
+    """
+    from telegram import BotCommand
+    commands = [
+        BotCommand("start", "Main Menu & Dashboard"),
+        BotCommand("harga", "Cek Harga & Fundamental"),
+        BotCommand("chart", "Lihat Chart Teknikal"),
+        BotCommand("analisa", "Analisis AI Lengkap"),
+        BotCommand("predict", "Proyeksi Harga Masa Depan"),
+        BotCommand("news", "Berita Saham Terkini"),
+        BotCommand("screener", "Market Screener (Potensial)"),
+        BotCommand("bsjp", "Sinyal Beli Sore Jual Pagi"),
+        BotCommand("picks", "Rekomendasi Besok (Prime Picks)"),
+        BotCommand("sectors", "Peta Rotasi Sektor"),
+        BotCommand("pulse", "Market Fear & Greed"),
+        BotCommand("flow", "Bandar Volume Flow"),
+        BotCommand("gainers", "Top Gainers Hari Ini"),
+        BotCommand("losers", "Top Losers Hari Ini"),
+        BotCommand("porto", "Cek Portofolio"),
+        BotCommand("buy", "Catat Pembelian"),
+        BotCommand("sell", "Catat Penjualan"),
+    ]
+    await application.bot.set_my_commands(commands)
+    logger.info("Bot commands set successfully.")
+
 if __name__ == '__main__':
     if TOKEN == "YOUR_TELEGRAM_BOT_TOKEN":
         print("Set ENV 'TELEGRAM_BOT_TOKEN' first!")
         
-    application = ApplicationBuilder().token(TOKEN).build()
+    application = ApplicationBuilder().token(TOKEN).post_init(post_init).build()
     
     # Handlers
     application.add_handler(CommandHandler('start', start))
