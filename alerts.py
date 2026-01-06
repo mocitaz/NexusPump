@@ -40,7 +40,7 @@ class StockMonitor:
 
     async def scan_market(self, context=None):
         """
-        Scans values. Returns list of alert strings.
+        Scans values. Returns list of Dicts {'text': msg, 'ticker': ticker} for button support.
         """
         # 1. Market Hours Check
         if not self.is_market_open():
@@ -108,14 +108,18 @@ class StockMonitor:
                             f"🔔 *NEXUS ALERT: {ticker}* {emoji_alert}\n"
                             f"⏰ {time_str} WIB\n"
                             f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                            f"� *IDR {price:,.0f}* ({change_pct:+.2f}%)\n"
+                            f"💵 *IDR {price:,.0f}* ({change_pct:+.2f}%)\n"
                             f"🔊 Vol: {volume:,.0f}\n"
                             f"📊 RSI: {rsi:.1f}\n\n"
                             f"📝 *TRIGGER*: _{reason}_\n"
-                            f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                            f"👉 `/chart {ticker}` | `/analisa {ticker}`"
+                            f"━━━━━━━━━━━━━━━━━━━━━━"
                         )
-                        alerts.append(alert_msg)
+                        
+                        # Pack into Dict for Main.py to add buttons
+                        alerts.append({
+                            'text': alert_msg,
+                            'ticker': ticker
+                        })
                         
                         # 3. Set Cooldown
                         self.alert_cooldowns[ticker] = now
