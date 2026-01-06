@@ -136,50 +136,68 @@ def analyze_stock(ticker):
 def scan_bsjp_strategy(watchlist):
     """
     V30 NEXUS SNIPER: BSJP PRO
-    Uses Real Backtest Data for Win Rate.
+    Uses Batch Data Fetch (Performance Optimized)
+    And Real Backtest Data for Win Rate.
     """
-    from data_fetcher import get_historical_data
+    from data_fetcher import get_batch_historical_data
     from backtester import calculate_bsjp_winrate
     candidates = []
     
-    for ticker in watchlist:
+    # 1. Batch Fetch Data (Much Faster)
+    # We need ~1-2 months for the Strategy Filter
+    # Backtester needs more (6mo), but we only fetch that for Candidates.
+    batch_data = get_batch_historical_data(watchlist, period="2mo")
+    
+    for ticker, df in batch_data.items():
         try:
-            df = get_historical_data(ticker, period="2mo")
-            if df.empty or len(df) < 21: continue
-            last = df.iloc[-1]
-            prev = df.iloc[-2]
-            
-            # Logic: Up > 2%, Vol > Avg, Close near High
-            change = ((last['Close'] - prev['Close']) / prev['Close']) * 100
-            avg_vol = df['Volume'].rolling(20).mean().iloc[-1]
-            vol_ratio = last['Volume'] / avg_vol
-            
-            if 2.0 <= change <= 15.0 and last['Close'] > df['Close'].rolling(20).mean().iloc[-1] and vol_ratio > 1.2:
-                # Calculate REAL Win Rate via Backtest
-                bt = calculate_bsjp_winrate(ticker, period="6mo")
-                
-                win_prob = 0
-                trade_count = 0
-                avg_gain = 0
-                
-                if bt:
-                    win_prob = bt['win_rate']
-                    trade_count = bt['trades']
-                    avg_gain = bt['avg_gain']
-                else:
-                    # Fallback Heuristic
-                    win_prob = 60
-                    if last['Close'] > df['Close'].rolling(50).mean().iloc[-1]: win_prob += 10
-                
-                candidates.append({
-                    "ticker": ticker,
-                    "price": last['Close'],
-                    "change": change,
-                    "vol_ratio": vol_ratio,
-                    "win_prob": win_prob,
-                    "trades": trade_count,
-                    "avg_gain": avg_gain
-                })
+           if df.empty or len(df) < 21: continue
+           
+           last = df.iloc[-1]
+           prev = df.iloc[-2]
+           
+           # Logic: Up > 2%, Vol > Avg, Close near High
+           if prev['Close'] == 0: continue
+           change = ((last['Close'] - prev['Close']) / prev['Close']) * 100
+           
+           # Handle missing Volume
+           if 'Volume' not in df.columns: continue
+           
+           avg_vol = df['Volume'].rolling(20).mean().iloc[-1]
+           if avg_vol == 0: continue
+           
+           vol_ratio = last['Volume'] / avg_vol
+           
+           # Rolling means for trend check
+           ma20 = df['Close'].rolling(20).mean().iloc[-1]
+           ma50 = df['Close'].rolling(50).mean().iloc[-1]
+           
+           if 2.0 <= change <= 15.0 and last['Close'] > ma20 and vol_ratio > 1.2:
+               # Calculate REAL Win Rate via Backtest (Only for candidates)
+               # Still individual fetch, but only for ~5-10 stocks max.
+               bt = calculate_bsjp_winrate(ticker, period="6mo")
+               
+               win_prob = 0
+               trade_count = 0
+               avg_gain = 0
+               
+               if bt:
+                   win_prob = bt['win_rate']
+                   trade_count = bt['trades']
+                   avg_gain = bt['avg_gain']
+               else:
+                   # Fallback Heuristic
+                   win_prob = 60
+                   if last['Close'] > ma50: win_prob += 10
+               
+               candidates.append({
+                   "ticker": ticker,
+                   "price": last['Close'],
+                   "change": change,
+                   "vol_ratio": vol_ratio,
+                   "win_prob": win_prob,
+                   "trades": trade_count,
+                   "avg_gain": avg_gain
+               })
         except Exception: continue
         
     candidates.sort(key=lambda x: x['win_prob'], reverse=True)
@@ -292,27 +310,33 @@ def predict_future_price(ticker, days=7):
 
 def scan_whale_flow(watchlist):
     """
-    V21 NEXUS FLOW (Unchanged)
+    V21 NEXUS FLOW (Performance Optimized)
+    Criteria: Silent Accumulation or Golden Flow.
     """
-    from data_fetcher import get_historical_data
+    from data_fetcher import get_batch_historical_data
     results = []
     
-    for ticker in watchlist:
+    # 1. Batch Fetch
+    batch_data = get_batch_historical_data(watchlist, period="1mo")
+    
+    for ticker, df in batch_data.items():
         try:
-            # Need strict 20 days for Avg Vol
-            df = get_historical_data(ticker, period="1mo")
             if df.empty or len(df) < 20: continue
             
             last = df.iloc[-1]
+            if df['Volume'].empty: continue
             avg_vol = df['Volume'].rolling(20).mean().iloc[-1]
             
             # Avoid division by zero
             if avg_vol == 0: continue
             
             vol_ratio = last['Volume'] / avg_vol
-            price_change = ((last['Close'] - df.iloc[-2]['Close']) / df.iloc[-2]['Close']) * 100
+            if df.iloc[-2]['Close'] == 0: price_change = 0
+            else:
+                price_change = ((last['Close'] - df.iloc[-2]['Close']) / df.iloc[-2]['Close']) * 100
             
             signal = None
+            desc = ""
             
             # Logic 1: Silent Accumulation (The dangerous one)
             # Price sideway (-1% to +2%) BUT Volume massive (> 2x)
@@ -338,23 +362,24 @@ def scan_whale_flow(watchlist):
         except Exception:
             continue
             
-            
-            # Sort by Vol Ratio (Highest Abnormal Volume first)
+    # Sort by Vol Ratio (Highest Abnormal Volume first)
     results.sort(key=lambda x: x['vol_ratio'], reverse=True)
     return results
 
 def scan_top_picks(watchlist):
     """
     V24 NEXUS WATCHLIST: TOP PICKS FOR TOMORROW
+    Uses Batch Data Fetch (Performance Optimized)
     Criteria: Strong Uptrend, Healthy RSI, Accumulation Volume.
     """
-    from data_fetcher import get_historical_data
+    from data_fetcher import get_batch_historical_data
     candidates = []
     
-    for ticker in watchlist:
+    # Batch Fetch Data (Much Faster)
+    batch_data = get_batch_historical_data(watchlist, period="3mo")
+    
+    for ticker, df in batch_data.items():
         try:
-            # Need ~50 days for MA20/50 and Vol Avg
-            df = get_historical_data(ticker, period="3mo")
             if df.empty or len(df) < 50: continue
             
             last = df.iloc[-1]
@@ -372,11 +397,11 @@ def scan_top_picks(watchlist):
             # 1. Uptrend: Close > MA20 & MA20 > MA50 (Golden Alignment)
             if not (last['Close'] > ma20 and ma20 > ma50): continue
             
-            # 2. RSI Healthy (45-70) - Not Oversold, Not Extreme Overbought
-            if not (45 <= rsi <= 75): continue
+            # 2. RSI Healthy (45-75) - Not Oversold, Not Extreme Overbought (Relaxed slightly)
+            if not (45 <= rsi <= 78): continue
             
             # 3. Volume Check (Liquid & Active)
-            if vol_ratio < 0.8: continue 
+            if vol_ratio < 0.6: continue # Relaxed to 0.6 to catch more
             
             # SCORING
             score = 0
@@ -390,7 +415,10 @@ def scan_top_picks(watchlist):
                 score += 30; reasons.append("Breakout 🚀")
             
             # Avoid too high pumps
-            change_pct = ((last['Close'] - df.iloc[-2]['Close']) / df.iloc[-2]['Close']) * 100
+            if df.iloc[-2]['Close'] == 0: change_pct = 0
+            else:
+                 change_pct = ((last['Close'] - df.iloc[-2]['Close']) / df.iloc[-2]['Close']) * 100
+                 
             if change_pct > 20: continue # Too risky already pumped
             
             candidates.append({

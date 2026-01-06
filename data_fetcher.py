@@ -101,6 +101,52 @@ def get_historical_data(ticker, period="1mo", interval="1d"):
         logger.error(f"Error fetching history for {ticker}: {e}")
         return pd.DataFrame()
 
+def get_batch_historical_data(tickers, period="1mo", interval="1d"):
+    """
+    Fetches historical data for MULTIPLE tickers efficiently.
+    Returns: Dict {ticker: DataFrame}
+    """
+    try:
+        # 1. Format Tickers
+        sa_tickers = []
+        for t in tickers:
+             if not t.endswith(".JK") and not t.endswith(".jk"):
+                 sa_tickers.append(f"{t}.JK")
+             else:
+                 sa_tickers.append(t)
+        
+        if not sa_tickers: return {}
+
+        # 2. Bulk Download
+        # threads=True uses multi-threading
+        # group_by='ticker' makes it easier to iterate: data['BBCA.JK'] -> DF
+        logger.info(f"Batch downloading {len(sa_tickers)} stocks...")
+        data = yf.download(sa_tickers, period=period, interval=interval, group_by='ticker', threads=True, progress=False)
+        
+        result = {}
+        for t_orig, t_sa in zip(tickers, sa_tickers):
+            # Extract DF for this ticker
+            # Note: If only 1 ticker is downloaded, structure is different (just DF), but we expect list usage.
+            # yfinance > 0.2: if multi tickers, columns are MultiIndex if not group_by='ticker'
+            # With group_by='ticker':
+            try:
+                if len(sa_tickers) == 1:
+                    df = data
+                else:
+                    df = data[t_sa]
+                
+                # Check emptiness
+                if not df.empty:
+                    result[t_orig.upper()] = df
+            except KeyError:
+                continue
+                
+        return result
+
+    except Exception as e:
+        logger.error(f"Batch download error: {e}")
+        return {}
+
 def get_stock_news(ticker):
     """
     Fetches latest news for the stock using yfinance.
