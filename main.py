@@ -363,15 +363,22 @@ async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def sell(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args if hasattr(context, 'args') and context.args else context.args
-    # /sell BBCA 5
-    if not args or len(args) < 2:
-        if update.message: await update.message.reply_text("⛔ Format: `/sell <kode> <lot>`\nContoh: `/sell BBCA 5`", parse_mode='Markdown')
+    # /sell BBCA 9600 5
+    if not args or len(args) < 3:
+        if update.message: await update.message.reply_text("⛔ Format: `/sell <kode> <harga> <lot>`\nContoh: `/sell BBCA 9600 5`", parse_mode='Markdown')
         return
 
     try:
         ticker = args[0].upper()
-        lots = int(args[1])
+        price = int(args[1])
+        lots = int(args[2])
         user_id = update.effective_user.id
+        
+        # Calculate PnL Preview (Need current Avg)
+        holdings = portfolio_db.get_portfolio(user_id)
+        avg_price = 0
+        if holdings and ticker in holdings:
+            avg_price = holdings[ticker]['avg_price']
         
         res = portfolio_db.sell_stock(user_id, ticker, lots)
         
@@ -380,10 +387,24 @@ async def sell(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif res == -2:
              await update.message.reply_text(f"❌ Lot tidak cukup. Cek `/porto`.", parse_mode='Markdown')
         else:
-            await update.message.reply_text(f"✅ *SELL SUCCESS: {ticker}*\nSisa Lot: {res}", parse_mode='Markdown')
+            # PnL Calc
+            pnl = (price - avg_price) * lots * 100
+            pnl_pct = ((price - avg_price) / avg_price * 100) if avg_price > 0 else 0
+            icon = "🟢" if pnl >= 0 else "🔴"
+            
+            msg = (
+                f"✅ *SELL SUCCESS: {ticker}*\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"💵 Sell Price: {price:,.0f}\n"
+                f"📦 Sold Lots : {lots}\n"
+                f"{icon} Realized PnL: *{pnl_pct:+.1f}%* (Rp {pnl:,.0f})\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"Sisa Lot: {res}"
+            )
+            await update.message.reply_text(msg, parse_mode='Markdown')
             
     except ValueError:
-        await update.message.reply_text("❌ Error: Lot harus angka.", parse_mode='Markdown')
+        await update.message.reply_text("❌ Error: Harga/Lot harus angka.", parse_mode='Markdown')
 
 async def porto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target_msg = update.message if update.message else update.callback_query.message
