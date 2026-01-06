@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 
 # --- Configuration ---
 # Replace with your actual values or env vars
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "YOUR_TELEGRAM_BOT_TOKEN")
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8446598251:AAE7EnK-1qwtr4hVLJF5TotPvcqYqB4jiCw")
 CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID", "@nexuspump")
 
 # Global Monitor Instance
