@@ -96,3 +96,87 @@ class StockMonitor:
                 continue
                 
         return alerts
+
+class MarketSessionReporter:
+    def __init__(self, bot_app):
+        self.bot = bot_app
+        
+    async def send_report(self, context, session_type):
+        """
+        Generates and sends market reports based on session.
+        session_type: 'open', 'mid', 'open2', 'close'
+        """
+        logger.info(f"Generating market report: {session_type}")
+        
+        # 1. Get Top Movers from Watchlist
+        from data_fetcher import get_top_gainers_losers_idx
+        gainers, losers = get_top_gainers_losers_idx() 
+        
+        # 2. Construct Message
+        if session_type == 'open':
+            msg = (
+                "🔔 *MARKET OPENING (SESI 1)* 🔔\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "Selamat pagi Traders! Market IHSG telah dibuka.\n"
+                "Pantau volatilitas awal 15 menit pertama.\n\n"
+                "🔥 *Fokus Pagi Ini*:\n"
+                "Gunakan `/screener` untuk mencari saham yang breakout pagi ini.\n"
+                "Gunakan `/gainers` untuk melihat top movers awal."
+            )
+            
+        elif session_type == 'mid':
+            # Mid day recap
+            top3 = gainers[:3] if gainers else []
+            msg = (
+                "🍱 *RECAP SESI 1 (ISHOMA)* 🍱\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "Market istirahat. Berikut highlight sesi 1:\n\n"
+                "🚀 *Top Gainers Watchlist*:\n"
+            )
+            for s in top3:
+                msg += f"• *{s['ticker']}*: {s['price']:,.0f} (+{s['change_pct']:.1f}%)\n"
+                
+            msg += "\n💡 *Saran*: Review portfolio anda. Siapkan rencana untuk Sesi 2."
+            
+        elif session_type == 'open2':
+            msg = (
+                "📢 *MARKET SESI 2 DIMULAI* 📢\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "Sesi perdagangan terakhir hari ini.\n"
+                "Cek apakah ada saham yang *rebound* atau *lanjut naik*.\n\n"
+                "👉 Cek `/screener` sekarang."
+            )
+            
+        elif session_type == 'close':
+            # Closing recap + BSJP
+            top3_g = gainers[:3] if gainers else []
+            top3_l = losers[:3] if losers else []
+            
+            msg = (
+                "🏁 *MARKET CLOSED (FINAL)* 🏁\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "Hari perdagangan berakhir. Simpan energi untuk besok!\n\n"
+                "🚀 *Top Performers*:\n"
+            )
+            for s in top3_g:
+                msg += f"• *{s['ticker']}*: {s['price']:,.0f} (+{s['change_pct']:.1f}%)\n"
+                
+            msg += "\n🔻 *Top Losers*:\n"
+            for s in top3_l:
+                msg += f"• *{s['ticker']}*: {s['price']:,.0f} ({s['change_pct']:.1f}%)\n"
+                
+            msg += "\n🌅 *Info BSJP*:\nCek saham potensi Beli Sore Jual Pagi dengan `/bsjp`."
+
+        else:
+            return
+
+        # Send to Channel
+        try:
+            import os
+            channel_id = os.getenv("TELEGRAM_CHANNEL_ID")
+            if channel_id:
+                await context.bot.send_message(chat_id=channel_id, text=msg, parse_mode='Markdown')
+            else:
+                logger.warning("No Channel ID for report")
+        except Exception as e:
+            logger.error(f"Failed to send report: {e}")

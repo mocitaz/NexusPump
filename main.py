@@ -7,7 +7,9 @@ from data_fetcher import get_stock_price, get_top_gainers_losers_idx
 from chart_generator import generate_chart
 from analyzer import analyze_stock, predict_future_price, scan_bsjp_strategy, scan_market_screener
 from idx_tickers import IDX_WATCHLIST
-from alerts import StockMonitor
+from alerts import StockMonitor, MarketSessionReporter
+import datetime
+import pytz
 
 # ... (Previous imports)
 
@@ -244,6 +246,22 @@ async def market_alert_job(context: ContextTypes.DEFAULT_TYPE):
             except Exception as e:
                 logger.error(f"Failed to send alert: {e}")
 
+async def session_open(context: ContextTypes.DEFAULT_TYPE):
+    reporter = MarketSessionReporter(context.application)
+    await reporter.send_report(context, 'open')
+
+async def session_mid(context: ContextTypes.DEFAULT_TYPE):
+    reporter = MarketSessionReporter(context.application)
+    await reporter.send_report(context, 'mid')
+
+async def session_open2(context: ContextTypes.DEFAULT_TYPE):
+    reporter = MarketSessionReporter(context.application)
+    await reporter.send_report(context, 'open2')
+
+async def session_close(context: ContextTypes.DEFAULT_TYPE):
+    reporter = MarketSessionReporter(context.application)
+    await reporter.send_report(context, 'close')
+
 if __name__ == '__main__':
     if TOKEN == "YOUR_TELEGRAM_BOT_TOKEN":
         print("Set ENV 'TELEGRAM_BOT_TOKEN' first!")
@@ -263,9 +281,29 @@ if __name__ == '__main__':
     
     # Setup JobQueue for background alerts
     job_queue = application.job_queue
-    # Run every 5 minutes (300s)
+    
+    # 1. Regular Alert Scan (Every 5 mins)
     job_queue.run_repeating(market_alert_job, interval=300, first=10)
     
-    print("--- NEXUS PUMP BOT V2 STARTING ---")
+    # 2. Scheduled Market Reports (WIB / UTC+7)
+    # Railway might be UTC, so we must be precise with Timezone object.
+    tz_jkt = pytz.timezone('Asia/Jakarta')
+    
+    # Days: 0=Mon, 4=Fri
+    weekdays = (0, 1, 2, 3, 4)
+    
+    # 09:00 WIB - Opening
+    job_queue.run_daily(session_open, time=datetime.time(hour=9, minute=0, tzinfo=tz_jkt), days=weekdays)
+    
+    # 12:00 WIB - Mid Break
+    job_queue.run_daily(session_mid, time=datetime.time(hour=12, minute=0, tzinfo=tz_jkt), days=weekdays)
+    
+    # 13:30 WIB - Sesi 2
+    job_queue.run_daily(session_open2, time=datetime.time(hour=13, minute=30, tzinfo=tz_jkt), days=weekdays)
+    
+    # 16:00 WIB - Closing
+    job_queue.run_daily(session_close, time=datetime.time(hour=16, minute=0, tzinfo=tz_jkt), days=weekdays)
+    
+    print("--- NEXUS PUMP BOT V5 (Screener + Reporter) STARTING ---")
     print("Bot is running...")
     application.run_polling()
