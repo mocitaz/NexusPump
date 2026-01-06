@@ -9,11 +9,95 @@ from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, Callb
 # Modules
 from data_fetcher import get_stock_price, get_top_gainers_losers_idx, get_stock_news, get_stock_fundamentals
 from chart_generator import generate_chart, generate_portfolio_pie
-from analyzer import analyze_stock, predict_future_price, scan_bsjp_strategy, scan_market_screener, scan_whale_flow, scan_top_picks, scan_sector_performance
+from analyzer import analyze_stock, predict_future_price, scan_bsjp_strategy, scan_market_screener, scan_whale_flow, scan_top_picks, scan_sector_performance, calculate_fibonacci_levels
 from market_pulse import calculate_market_mood, generate_gauge_chart
 from idx_tickers import IDX_WATCHLIST
 from alerts import StockMonitor, MarketSessionReporter
 from portfolio_manager import PortfolioManager
+
+# ... (Previous code) ...
+
+async def fibo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Support direct call or callback context override
+    args = context.args if hasattr(context, 'args') and context.args else context.args
+    
+    if not args:
+         if update.message:
+            await update.message.reply_text("📐 Gunakan format: `/fibo <kode saham>`", parse_mode='Markdown')
+         return
+
+    ticker = args[0].upper()
+    target_msg = update.message if update.message else update.callback_query.message
+    waiting_msg = await target_msg.reply_text(f"📐 *Calculating Golden Ratio {ticker}...*", parse_mode='Markdown')
+    
+    # 1. Calculate Fibonacci
+    fibo_data = await asyncio.to_thread(calculate_fibonacci_levels, ticker, period="6mo")
+    
+    if not fibo_data:
+        await waiting_msg.edit_text(f"❌ *Fibonacci Error*.\nData tidak cukup untuk menentukan Swing High/Low.", parse_mode='Markdown')
+        return
+
+    # 2. Generate Chart with Fibo Lines
+    buf = await asyncio.to_thread(generate_chart, ticker, period="6mo", fibo_levels=fibo_data['levels'])
+    
+    if buf:
+        # Format Analysis Text
+        levels = fibo_data['levels']
+        current = fibo_data['current']
+        
+        # Determine closest support/resistance
+        closest_sup = 0
+        closest_res = 999999
+        
+        for k, v in levels.items():
+            if v < current and v > closest_sup: closest_sup = v
+            if v > current and v < closest_res: closest_res = v
+            
+        trend_icon = "📈" if fibo_data['trend'] == "UP" else "📉"
+        
+        caption = (
+            f"📐 *NEXUS AUTO-FIBONACCI* 📐\n"
+            f"🎯 *{ticker}* (6-Month Swing)\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🏷️ *Price*: {current:,.0f} {trend_icon}\n"
+            f"🏔️ *Swing High*: {fibo_data['high']:,.0f}\n"
+            f"🌊 *Swing Low*: {fibo_data['low']:,.0f}\n\n"
+            f"🔑 *KEY LEVELS (Golden Ratio)*:\n"
+            f"• 0.000: {levels['Fib 0.000']:,.0f}\n"
+            f"• 0.236: {levels['Fib 0.236']:,.0f}\n"
+            f"• 0.382: {levels['Fib 0.382']:,.0f}\n"
+            f"• 0.500: {levels['Fib 0.500']:,.0f} (Mid)\n"
+            f"• 0.618: {levels['Fib 0.618']:,.0f} ⭐\n"
+            f"• 0.786: {levels['Fib 0.786']:,.0f}\n"
+            f"• 1.000: {levels['Fib 1.000']:,.0f}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💡 *INSIGHT*:\n"
+            f"Support Terdekat: {closest_sup:,.0f}\n"
+            f"Resistance Terdekat: {closest_res:,.0f}\n"
+            f"_Golden Ratio 0.618 adalah area pantulan terkuat._"
+        )
+        
+        await target_msg.reply_photo(photo=buf, caption=caption, parse_mode='Markdown')
+        await waiting_msg.delete()
+    else:
+        await waiting_msg.edit_text("❌ Gagal membuat chart Fibonacci.", parse_mode='Markdown')
+
+async def channel_command_dispatcher(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.channel_post or not update.channel_post.text: return
+    text = update.channel_post.text
+    if not text.startswith('/'): return
+    parts = text.split()
+    command = parts[0].lower().split('@')[0].replace('/', '')
+    args = parts[1:]
+    context.args = args
+    cmd_map = {
+        'start': start, 'harga': harga, 'chart': chart, 'analisa': analisa,
+        'news': news, 'predict': predict, 'screener': screener, 'bsjp': bsjp,
+        'picks': picks, 'sector': sectors, 'pulse': pulse, 'flow': flow, 
+        'buy': buy, 'sell': sell, 'porto': porto, 'fibo': fibo
+    }
+    if command in cmd_map:
+        await cmd_map[command](update, context)
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -81,6 +165,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🧠 *DEEP INTELLIGENCE*\n"
         "• `/analisa <kode>` : AI Professional Analysis (Multi-Timeframe).\n"
         "• `/predict <kode>` : Future Projection (Scenario Mapping).\n"
+        "• `/fibo <kode>`    : Auto-Fibonacci Golden Ratio 📐\n"
         "• `/chart <kode>`   : Ultimate Neon Chart (30 Days Focus).\n"
         "• `/harga <kode>`   : Info Harga Live & Fundamental.\n\n"
         "ℹ️ *QUICK INFO*\n"

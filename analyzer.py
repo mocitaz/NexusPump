@@ -521,3 +521,50 @@ def scan_sector_performance():
     except Exception as e:
         logger.error(f"Sector Scan Error: {e}")
         return []
+
+def calculate_fibonacci_levels(ticker, period="6mo"):
+    """
+    V31 AUTO-FIBONACCI
+    Calculates Fibonacci Retracement Levels based on Swing High/Low.
+    """
+    from data_fetcher import get_historical_data
+    try:
+        df = get_historical_data(ticker, period=period)
+        if df.empty or len(df) < 20: return None
+        
+        # 1. Identify Swing High & Low
+        # We assume the Trend is Uptrend for Retracement (Low -> High)
+        # Or Downtrend (High -> Low).
+        # Simple Logic: Max High and Min Low in the period.
+        
+        high_price = df['High'].max()
+        low_price = df['Low'].min()
+        current_price = df['Close'].iloc[-1]
+        
+        diff = high_price - low_price
+        
+        # Fibonacci Ratios
+        ratios = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1]
+        levels = {}
+        
+        # Determine Direction?
+        # Usually we draw from recent major swing. 
+        # If Current Close is closer to High -> Retracement from Low to High? No.
+        # Standard: Just plot the levels between High and Low.
+        # Retracement Level = High - (Difference * Ratio)
+        
+        for r in ratios:
+            price_level = high_price - (diff * r)
+            levels[f"Fib {r:.3f}"] = price_level
+            
+        return {
+            "high": high_price,
+            "low": low_price,
+            "levels": levels,
+            "current": current_price,
+            "trend": "UP" if current_price > (low_price + high_price)/2 else "DOWN"
+        }
+        
+    except Exception as e:
+        logger.error(f"Fibonacci Error {ticker}: {e}")
+        return None

@@ -9,10 +9,11 @@ from data_fetcher import get_historical_data
 
 logger = logging.getLogger(__name__)
 
-def generate_chart(ticker, period="1mo", sup_res_levels=None):
+def generate_chart(ticker, period="1mo", sup_res_levels=None, fibo_levels=None):
     """
     Generates a premium Dark Mode candlestick chart with MA, RSI, and MACD.
-    sup_res_levels: list of prices [S1, R1, ...] to draw dashed lines.
+    sup_res_levels: list of prices [S1, R1, ...]
+    fibo_levels: dict of {'Fib 0.618': 1234, ...}
     """
     try:
         # 1. Fetch SUFFICIENT Data (Always 1y minimum for MA200)
@@ -21,50 +22,35 @@ def generate_chart(ticker, period="1mo", sup_res_levels=None):
             logger.warning(f"Insufficient data for {ticker}")
             return None
             
-        # 2. Technical Calculations (On Full Data)
+        # ... (Calculations remain same) ...
         close = df_full['Close']
-        
-        # MAs
         df_full['MA20'] = close.rolling(window=20).mean()
         df_full['MA50'] = close.rolling(window=50).mean()
         df_full['MA100'] = close.rolling(window=100).mean()
-        
-        # RSI
         df_full['rsi'] = ta.momentum.RSIIndicator(close, window=14).rsi()
-        
-        # MACD
         macd = ta.trend.MACD(close)
         df_full['macd'] = macd.macd()
         df_full['macd_signal'] = macd.macd_signal()
         df_full['macd_hist'] = macd.macd_diff()
         
         # 3. Slice Data for Display
-        # Determine slice length based on requested period
         slice_map = {
-            "1mo": 25,   # ~1 Month trading days
-            "3mo": 65,   # ~3 Months
-            "6mo": 130,  # ~6 Months
-            "1y": 250    # ~1 Year
+            "1mo": 25, "3mo": 65, "6mo": 130, "1y": 250
         }
-        lookback = slice_map.get(period, 25) # Default 1mo
+        lookback = slice_map.get(period, 25)
         
         if len(df_full) > lookback:
             df_plot = df_full.tail(lookback).copy()
         else:
             df_plot = df_full.copy()
             
-        # 4. Prepare AddPlots (Using SLICED Data)
+        # 4. Prepare AddPlots
         addplots = [
-             # MA Lines
-            mpf.make_addplot(df_plot['MA20'], color='#00f2ff', width=1.5, panel=0), # Cyan
-            mpf.make_addplot(df_plot['MA50'], color='#ff9100', width=1.5, panel=0), # Orange
-            
-            # RSI
+            mpf.make_addplot(df_plot['MA20'], color='#00f2ff', width=1.5, panel=0), 
+            mpf.make_addplot(df_plot['MA50'], color='#ff9100', width=1.5, panel=0),
             mpf.make_addplot(df_plot['rsi'], panel=2, color='#b026ff', ylabel='RSI', width=1.5),
             mpf.make_addplot([70]*len(df_plot), panel=2, color='#ff0055', linestyle='--', width=0.8),
             mpf.make_addplot([30]*len(df_plot), panel=2, color='#00ff44', linestyle='--', width=0.8),
-            
-            # MACD
             mpf.make_addplot(df_plot['macd'], panel=3, color='#00f2ff', ylabel='MACD', width=1),
             mpf.make_addplot(df_plot['macd_signal'], panel=3, color='#ff9100', width=1),
             mpf.make_addplot(df_plot['macd_hist'], panel=3, type='bar', color='#444444', alpha=0.6),
@@ -89,11 +75,14 @@ def generate_chart(ticker, period="1mo", sup_res_levels=None):
         # 6. Prepare Plot Arguments
         buf = io.BytesIO()
         
+        title_text = f"\n{ticker} - {period.upper()} (NEXUS AI)"
+        if fibo_levels: title_text += " [FIBO MODE]"
+        
         plot_kwargs = dict(
             type='candle',
             volume=True,
             addplot=addplots,
-            title=dict(title=f"\n{ticker} - {period.upper()} (NEXUS AI)", color='#ffffff', fontsize=14),
+            title=dict(title=title_text, color='#ffffff', fontsize=14),
             style=s,
             panel_ratios=(4, 1, 1, 1), 
             datetime_format='%d-%b',
@@ -102,15 +91,38 @@ def generate_chart(ticker, period="1mo", sup_res_levels=None):
             savefig=dict(fname=buf, dpi=120, bbox_inches='tight', facecolor='#0a0a0a')
         )
         
-        # Add S/R Lines ONLY if valid
+        # Combine S/R and Fibo Lines
+        combined_hlines = []
+        combined_colors = []
+        
         if sup_res_levels:
-            hlines_dict = dict(
-                hlines=sup_res_levels, 
-                colors=['#ffffff'] * len(sup_res_levels), 
+            combined_hlines.extend(sup_res_levels)
+            combined_colors.extend(['#ffffff'] * len(sup_res_levels)) # White for SR
+            
+        if fibo_levels:
+            # Sort levels logic? No need, mpf handles list.
+            for label, price in fibo_levels.items():
+                combined_hlines.append(price)
+                
+                # Special Colors for Fibo Ratios
+                if "0.618" in label: color = '#ffd700' # GOLD
+                elif "0.500" in label: color = '#ffffff' # White
+                elif "0.382" in label: color = '#00f2ff' # Cyan
+                elif "0.236" in label: color = '#ff0055' # Red/Pink
+                elif "0.786" in label: color = '#00ff44' # Green
+                else: color = '#808080' # Grey for 0 and 1
+                
+                combined_colors.append(color)
+        
+        if combined_hlines:
+             hlines_dict = dict(
+                hlines=combined_hlines, 
+                colors=combined_colors, 
                 linestyle='-.', 
-                linewidths=0.8
+                linewidths=0.8,
+                alpha=0.7
             )
-            plot_kwargs['hlines'] = hlines_dict
+             plot_kwargs['hlines'] = hlines_dict
 
         mpf.plot(df_plot, **plot_kwargs)
         
