@@ -417,7 +417,25 @@ async def losers(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def market_alert_job(context: ContextTypes.DEFAULT_TYPE):
     """
     Background job to scan for alerts and send to channel.
+    Double-Check Market Hours here to prevent Spam Loop.
     """
+    tz_jkt = pytz.timezone('Asia/Jakarta')
+    now = datetime.datetime.now(tz_jkt)
+    
+    # EMERGENCY HARD STOP: Only allow 09:00 - 16:15
+    # If it is Saturday (5) or Sunday (6), STOP.
+    if now.weekday() > 4:
+        return
+
+    # Hour Check
+    current_time = now.time()
+    start_time = datetime.time(9, 0)
+    end_time = datetime.time(16, 15)
+    
+    if not (start_time <= current_time <= end_time):
+        # Market Closed, do NOT scan.
+        return
+
     alerts = await monitor.scan_market()
     if alerts:
         for alert in alerts:
