@@ -33,7 +33,7 @@ Bot Telegram untuk analisis teknikal, chart, dan alert saham Indonesia (IDX) sec
 4.  **Konfigurasi Environment**
     Set environment variable berikut (atau edit langsung di `main.py` walau tidak disarankan untuk production):
     - `TELEGRAM_BOT_TOKEN`: Token dari @BotFather
-    - `TELEGRAM_CHANNEL_ID`: ID Channel untuk alerts (misal `@channel_saham_gw`)
+    - `TELEGRAM_CHANNEL_ID`: ID Channel untuk alerts (misal `@nexuspump`)
 
 5.  **Jalankan Bot**
     ```bash
