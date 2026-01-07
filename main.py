@@ -928,10 +928,16 @@ async def bsjp(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             stats_str = "Win Rate: *Unknown* (Not enough data)"
             
+        # V58: Display Fundamental Data
+        pe = c.get('pe', 0)
+        roe = c.get('roe', 0)
+        quality = c.get('quality_score', 0)
+        
         msg += (
             f"{icon} *{c['ticker']}* @ {c['price']:,.0f}\n"
             f"   📈 Gain: +{c['change']:.1f}% | 🎲 {stats_str}\n"
-            f"   🔊 Vol Ratio: {vol_ratio:.1f}x | Avg Scalp: +{avg_gain:.1f}%\n\n"
+            f"   🔊 Vol Ratio: {vol_ratio:.1f}x | Avg Scalp: +{avg_gain:.1f}%\n"
+            f"   📊 Fundamental: PE {pe:.1f} | ROE {roe:.1f}% | Q-Score: {quality}\n\n"
         )
     msg += "━━━━━━━━━━━━━━━━━━━━━━\n⚠️ _Win Rate based on 6 Months Backtest._"
     await waiting.edit_text(msg, parse_mode='Markdown')
@@ -966,11 +972,17 @@ async def bpjs(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         icon = "🔥" if win_prob >= 70 else "☀️"
         
+        # V58: Display Fundamental Data
+        pe = c.get('pe', 0)
+        roe = c.get('roe', 0)
+        quality = c.get('quality_score', 0)
+        
         msg += (
             f"{icon} *{c['ticker']}* @ {c['price']:,.0f}\n"
             f"   🚀 Volatility: +{c['change']:.1f}% (Gap: {gap:+.1f}%)\n"
             f"   💰 Hist. Win Rate: *{win_prob:.1f}%* ({c['trades']} Days)\n"
-            f"   🎯 Est. Daily Gain: +{c['avg_gain']:.1f}%\n\n"
+            f"   🎯 Est. Daily Gain: +{c['avg_gain']:.1f}%\n"
+            f"   📊 Fundamental: PE {pe:.1f} | ROE {roe:.1f}% | Q-Score: {quality}\n\n"
         )
     msg += "━━━━━━━━━━━━━━━━━━━━━━\n⚠️ _Win Rate: Probability of Closing Green (Open < Close)._"
     await waiting.edit_text(msg, parse_mode='Markdown')

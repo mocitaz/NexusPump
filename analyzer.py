@@ -139,7 +139,7 @@ def scan_bsjp_strategy(watchlist):
     Uses Batch Data Fetch (Performance Optimized)
     And Real Backtest Data for Win Rate.
     """
-    from data_fetcher import get_batch_historical_data
+    from data_fetcher import get_batch_historical_data, get_stock_fundamentals
     from backtester import calculate_bsjp_winrate
     candidates = []
     
@@ -189,6 +189,27 @@ def scan_bsjp_strategy(watchlist):
                    win_prob = 60
                    if last['Close'] > ma50: win_prob += 10
                
+               # V58: Fetch Fundamentals for Quality Scoring
+               fundamentals = get_stock_fundamentals(ticker)
+               
+               # Calculate Quality Score
+               quality_score = 0
+               pe = fundamentals.get('pe_ratio', 0) if fundamentals else 0
+               roe = fundamentals.get('roe', 0) if fundamentals else 0
+               mcap = fundamentals.get('market_cap', 0) if fundamentals else 0
+               
+               # Filter: Exclude bad fundamentals
+               if pe > 50 or (roe and roe < 0) or mcap < 1_000_000_000_000:
+                   continue  # Skip this candidate
+               
+               # Quality Scoring
+               if pe > 0 and pe < 20:
+                   quality_score += 10
+               if roe and roe > 0.15:  # ROE > 15%
+                   quality_score += 10
+               if mcap > 10_000_000_000_000:  # > 10T
+                   quality_score += 5
+               
                candidates.append({
                    "ticker": ticker,
                    "price": last['Close'],
@@ -196,11 +217,16 @@ def scan_bsjp_strategy(watchlist):
                    "vol_ratio": vol_ratio,
                    "win_prob": win_prob,
                    "trades": trade_count,
-                   "avg_gain": avg_gain
+                   "avg_gain": avg_gain,
+                   "quality_score": quality_score,
+                   "pe": pe,
+                   "roe": roe * 100 if roe else 0,
+                   "mcap": mcap
                })
         except Exception: continue
         
-    candidates.sort(key=lambda x: x['win_prob'], reverse=True)
+    # V58: Sort by combined score (Win Prob + Quality Score)
+    candidates.sort(key=lambda x: (x['win_prob'] + x['quality_score'], x['change']), reverse=True)
     return candidates
 
 def scan_bpjs_strategy(watchlist):
@@ -210,7 +236,7 @@ def scan_bpjs_strategy(watchlist):
     1. Gap Up / Strong Open (> 0.5%)
     2. High Prob History (Win Rate > 60%)
     """
-    from data_fetcher import get_batch_historical_data
+    from data_fetcher import get_batch_historical_data, get_stock_fundamentals
     from backtester import calculate_bpjs_performance
     
     candidates = []
@@ -239,19 +265,44 @@ def scan_bpjs_strategy(watchlist):
                stats = calculate_bpjs_performance(ticker, period="6mo", df=df)
                
                if stats and stats['win_rate'] >= 45: # Relaxed to 45% to see more candidates
-                    candidates.append({
-                        "ticker": ticker,
-                        "price": last['Close'],
-                        "change": current_chg,
-                        "gap": gap,
-                        "win_rate": stats['win_rate'],
-                        "avg_gain": stats['avg_gain'],
-                        "trades": stats['trades']
-                    })
+                     # V58: Fetch Fundamentals for Quality Scoring
+                     fundamentals = get_stock_fundamentals(ticker)
+                     
+                     # Calculate Quality Score
+                     quality_score = 0
+                     pe = fundamentals.get('pe_ratio', 0) if fundamentals else 0
+                     roe = fundamentals.get('roe', 0) if fundamentals else 0
+                     mcap = fundamentals.get('market_cap', 0) if fundamentals else 0
+                     
+                     # Filter: Exclude bad fundamentals
+                     if pe > 50 or (roe and roe < 0) or mcap < 1_000_000_000_000:
+                         continue  # Skip this candidate
+                     
+                     # Quality Scoring
+                     if pe > 0 and pe < 20:
+                         quality_score += 10
+                     if roe and roe > 0.15:  # ROE > 15%
+                         quality_score += 10
+                     if mcap > 10_000_000_000_000:  # > 10T
+                         quality_score += 5
+                     
+                     candidates.append({
+                         "ticker": ticker,
+                         "price": last['Close'],
+                         "change": current_chg,
+                         "gap": gap,
+                         "win_rate": stats['win_rate'],
+                         "avg_gain": stats['avg_gain'],
+                         "trades": stats['trades'],
+                         "quality_score": quality_score,
+                         "pe": pe,
+                         "roe": roe * 100 if roe else 0,  # Convert to percentage
+                         "mcap": mcap
+                     })
         except Exception: continue
         
-    # Sort by Win Rate then Change
-    candidates.sort(key=lambda x: (x['win_rate'], x['change']), reverse=True)
+    # V58: Sort by combined score (Win Rate + Quality Score)
+    candidates.sort(key=lambda x: (x['win_rate'] + x['quality_score'], x['change']), reverse=True)
     return candidates
 
 def scan_market_screener(watchlist):
