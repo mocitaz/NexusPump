@@ -9,6 +9,33 @@ from data_fetcher import get_historical_data
 
 logger = logging.getLogger(__name__)
 
+# Link: Global Helper for Logo
+def add_logo(fig, position='top-right'):
+    """
+    Overlays logo.png on the figure.
+    """
+    try:
+        import matplotlib.image as mpimg
+        import os
+        logo_path = "logo.png"
+        if not os.path.exists(logo_path): return
+        img = mpimg.imread(logo_path)
+        
+        # Create a new axes for the logo
+        if position == 'top-right':
+            # (left, bottom, width, height)
+            ax_logo = fig.add_axes([0.82, 0.82, 0.15, 0.15], anchor='NE', zorder=10)
+        elif position == 'top-left':
+            ax_logo = fig.add_axes([0.03, 0.82, 0.15, 0.15], anchor='NW', zorder=10)
+        elif position == 'xray': # Custom for X-Ray
+            ax_logo = fig.add_axes([0.85, 0.90, 0.10, 0.10], anchor='NE', zorder=10)
+            
+        ax_logo.imshow(img)
+        ax_logo.axis('off')
+    except Exception as e:
+        logger.error(f"Failed to add logo: {e}")
+
+
 def generate_chart(ticker, period="1mo", sup_res_levels=None, fibo_levels=None):
     """
     Generates a premium Dark Mode candlestick chart with MA, RSI, and MACD.
@@ -88,7 +115,7 @@ def generate_chart(ticker, period="1mo", sup_res_levels=None, fibo_levels=None):
             datetime_format='%d-%b',
             tight_layout=True,
             scale_width_adjustment=dict(volume=0.7, candle=1.2),
-            savefig=dict(fname=buf, dpi=120, bbox_inches='tight', facecolor='#0a0a0a')
+            returnfig=True # Enable Figure manipulation
         )
         
         # Combine S/R and Fibo Lines
@@ -100,18 +127,14 @@ def generate_chart(ticker, period="1mo", sup_res_levels=None, fibo_levels=None):
             combined_colors.extend(['#ffffff'] * len(sup_res_levels)) # White for SR
             
         if fibo_levels:
-            # Sort levels logic? No need, mpf handles list.
             for label, price in fibo_levels.items():
                 combined_hlines.append(price)
-                
-                # Special Colors for Fibo Ratios
                 if "0.618" in label: color = '#ffd700' # GOLD
                 elif "0.500" in label: color = '#ffffff' # White
                 elif "0.382" in label: color = '#00f2ff' # Cyan
                 elif "0.236" in label: color = '#ff0055' # Red/Pink
                 elif "0.786" in label: color = '#00ff44' # Green
-                else: color = '#808080' # Grey for 0 and 1
-                
+                else: color = '#808080' # Grey
                 combined_colors.append(color)
         
         if combined_hlines:
@@ -124,8 +147,14 @@ def generate_chart(ticker, period="1mo", sup_res_levels=None, fibo_levels=None):
             )
              plot_kwargs['hlines'] = hlines_dict
 
-        mpf.plot(df_plot, **plot_kwargs)
+        # Plot and Get Figure
+        fig, axlist = mpf.plot(df_plot, **plot_kwargs)
         
+        # Add Logo
+        add_logo(fig, 'top-right')
+        
+        # Save Manually
+        fig.savefig(buf, dpi=120, bbox_inches='tight', facecolor='#0a0a0a')
         buf.seek(0)
         return buf
         
@@ -141,8 +170,12 @@ def generate_xray_image(ticker, period="6mo", radar_scores=None, fibo_levels=Non
     import matplotlib.pyplot as plt
     import matplotlib.gridspec as gridspec
     import matplotlib.patches as patches
+    import matplotlib.image as mpimg
     import numpy as np
+    import os
     from data_fetcher import get_historical_data
+    
+    # helper to add logo -> Removed (Using Global)
     
     try:
         # 1. Fetch Data
@@ -162,6 +195,9 @@ def generate_xray_image(ticker, period="6mo", radar_scores=None, fibo_levels=Non
         # Add Background Gradient/Texture effect (Simulated via overlay)
         rect = fig.patch
         rect.set_facecolor('#050505')
+        
+        # Add Logo
+        add_logo(fig, 'xray')
         
         # Grid Layout
         gs = gridspec.GridSpec(5, 2, height_ratios=[1.2, 0.8, 4, 3, 1])
@@ -235,8 +271,11 @@ def generate_xray_image(ticker, period="6mo", radar_scores=None, fibo_levels=Non
                 else: colors.append('#333333') # Dim others
         
         # Plot Candles
-        mpf.plot(df_plot, type='candle', style=s, ax=ax_main, volume=False, 
-                 hlines=dict(hlines=hlines, colors=colors, linewidths=0.7, linestyle='--') if hlines else None)
+        mpf_kwargs = dict(type='candle', style=s, ax=ax_main, volume=False)
+        if hlines:
+             mpf_kwargs['hlines'] = dict(hlines=hlines, colors=colors, linewidths=0.7, linestyle='--')
+             
+        mpf.plot(df_plot, **mpf_kwargs)
         
         ax_main.yaxis.tick_right()
         ax_main.tick_params(colors='#666666', labelsize=8)
@@ -390,6 +429,9 @@ def generate_portfolio_pie(holdings, total_value, cash_balance=0):
         
         # Title
         ax.set_title(f"PORTFOLIO ALLOCATION\nRp {total_value:,.0f}", color='white', pad=20, fontsize=12, fontweight='bold')
+        
+        # Add Logo
+        add_logo(fig, 'top-left')
         
         buf = io.BytesIO()
         plt.savefig(buf, format='png', facecolor='#0a0a0a', bbox_inches='tight', dpi=100)
