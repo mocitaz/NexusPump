@@ -1,4 +1,4 @@
-python-telegram-bot[job-queue,webhooks]
+python-telegram-bot[job-queue,webhooks]==21.4
 yfinance
 pandas
 ta
@@ -9,3 +9,5 @@ scikit-learn
 numpy
 feedparser
 tornado
+requests
+
