@@ -1210,4 +1210,21 @@ if __name__ == '__main__':
     job_queue.run_daily(session_close, time=datetime.time(hour=16, minute=0, tzinfo=tz_jkt), days=weekdays)
     
     print("--- NEXUS PUMP BOT V19-V26 STARTING ---")
-    application.run_polling()
+    
+    # V45: WEBHOOK AUTO-SWITCHING (Conflict Resolution)
+    # If running on Railway (Public Domain exists), use Webhook.
+    # If running Local, use Polling.
+    RAILWAY_DOMAIN = os.getenv("RAILWAY_PUBLIC_DOMAIN")
+    PORT = int(os.getenv("PORT", 8080))
+    
+    if RAILWAY_DOMAIN:
+        print(f"🌍 WEBHOOK MODE ENABLED (Domain: {RAILWAY_DOMAIN})")
+        application.run_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            url_path="webhook",
+            webhook_url=f"https://{RAILWAY_DOMAIN}/webhook"
+        )
+    else:
+        print("💻 POLLING MODE ENABLED (Local)")
+        application.run_polling()
