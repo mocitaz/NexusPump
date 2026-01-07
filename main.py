@@ -236,6 +236,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• `/predict <kode>` : Future Projection (Scenario Mapping).\n"
         "• `/fibo <kode>`    : Auto-Fibonacci Golden Ratio 📐\n"
         "• `/chart <kode>`   : Ultimate Neon Chart (30 Days Focus).\n"
+        "• `/xray <kode>`    : Infografis Deep Dive (Chart + Radar + Stats) 🩻\n"
         "• `/harga <kode>`   : Info Harga Live & Fundamental.\n\n"
         "ℹ️ *QUICK INFO*\n"
         "• `/gainers` : Top 5 Saham Paling Untung.\n"
@@ -1005,7 +1006,8 @@ async def channel_command_dispatcher(update: Update, context: ContextTypes.DEFAU
         'news': news, 'predict': predict, 'screener': screener, 'bsjp': bsjp,
         'gainers': gainers, 'losers': losers, 'pulse': pulse, 'flow': flow,
         'picks': picks, 'rekomendasi': picks, 'sectors': sectors,
-        'buy': buy, 'sell': sell, 'porto': porto, 'portfolio': porto
+        'buy': buy, 'sell': sell, 'porto': porto, 'portfolio': porto,
+        'fibo': fibo, 'xray': xray
     }
     if command in cmd_map:
         await cmd_map[command](update, context)
@@ -1021,7 +1023,9 @@ async def post_init(application):
         BotCommand("chart", "Lihat Chart Teknikal"),
         BotCommand("analisa", "Analisis AI Lengkap"),
         BotCommand("predict", "Proyeksi Harga Masa Depan"),
+        BotCommand("predict", "Proyeksi Harga Masa Depan"),
         BotCommand("fibo", "Auto-Fibonacci Golden Ratio"),
+        BotCommand("xray", "Nexus X-Ray Infographic"),
         BotCommand("news", "Berita Saham Terkini"),
         BotCommand("screener", "Market Screener (Potensial)"),
         BotCommand("bsjp", "Sinyal Beli Sore Jual Pagi"),
