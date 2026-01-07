@@ -1122,7 +1122,8 @@ async def channel_command_dispatcher(update: Update, context: ContextTypes.DEFAU
         'gainers': gainers, 'losers': losers, 'pulse': pulse, 'flow': flow,
         'picks': picks, 'rekomendasi': picks, 'sectors': sectors,
         'buy': buy, 'sell': sell, 'porto': porto, 'portfolio': porto,
-        'fibo': fibo, 'xray': xray
+        'fibo': fibo, 'xray': xray,
+        'bpjs': bpjs, 'break': break_session, 'ping': ping
     }
     if command in cmd_map:
         await cmd_map[command](update, context)
@@ -1183,7 +1184,12 @@ if __name__ == '__main__':
     application.add_handler(CommandHandler('rekomendasi', picks))
     
     application.add_handler(CommandHandler('fibo', fibo)) 
-    application.add_handler(CommandHandler('xray', xray)) # FIX: Register XRAY Handler
+    application.add_handler(CommandHandler('xray', xray))
+    
+    # V54: CRITICAL FIX - Missing Handlers Registration
+    application.add_handler(CommandHandler('bpjs', bpjs))
+    application.add_handler(CommandHandler('break', break_session))
+    application.add_handler(CommandHandler('ping', ping))
     
     # Portfolio Handlers
     application.add_handler(CommandHandler('buy', buy))
