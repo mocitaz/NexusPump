@@ -582,8 +582,11 @@ def analyze_radar_metrics(ticker):
         df = get_historical_data(ticker, period="6mo")
         if df.empty or len(df) < 50: return None
         
-        # 2. Fetch Fundamentals
-        fund = get_stock_fundamentals(ticker) # {'pe': 15, 'pbv': 2...} or None
+        # 2. Fetch Fundamentals (Robust)
+        try:
+            fund = get_stock_fundamentals(ticker) 
+        except Exception:
+            fund = None
         
         scores = {
             "Valuation": 50, "Trend": 50, "Momentum": 50, "Volatility": 50, "Volume": 50
