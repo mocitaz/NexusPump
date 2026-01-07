@@ -276,3 +276,50 @@ def get_stock_fundamentals(ticker):
     except Exception as e:
         logger.error(f"Error fetching fundamentals for {ticker}: {e}")
         return None
+
+def get_financial_history(ticker):
+    """
+    Fetches annual Revenue and Net Income for X-Ray visualization.
+    Returns DataFrame or Dict with last 3 years.
+    """
+    try:
+        if not ticker.endswith(".JK") and not ticker.endswith(".jk"):
+            ticker = f"{ticker}.JK"
+            
+        stock = yf.Ticker(ticker)
+        fin = stock.financials
+        
+        if fin.empty:
+            return None
+            
+        # Extract Revenue and Net Income
+        # yfinance structure varies, but usually 'Total Revenue' and 'Net Income' exist
+        try:
+            # Transpose to have Years as Index
+            df = fin.T
+            # Filter columns if they exist
+            cols = ['Total Revenue', 'Net Income']
+            available_cols = [c for c in cols if c in df.columns]
+            
+            if not available_cols:
+                return None
+                
+            # Get last 3 years
+            df_recent = df[available_cols].head(3).iloc[::-1] # Reverse to have Oldest -> Newest
+            
+            # Convert to simple list/dict structure for easy plotting
+            # Years are usually Timestamps
+            data = {
+                'years': [d.year for d in df_recent.index],
+                'revenue': df_recent['Total Revenue'].tolist() if 'Total Revenue' in df_recent else [],
+                'profit': df_recent['Net Income'].tolist() if 'Net Income' in df_recent else []
+            }
+            return data
+            
+        except Exception as e:
+            logger.error(f"Error parsing financials for {ticker}: {e}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"Error fetching financials for {ticker}: {e}")
+        return None

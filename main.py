@@ -7,7 +7,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, CallbackQueryHandler, MessageHandler, filters
 
 # Modules
-from data_fetcher import get_stock_price, get_top_gainers_losers_idx, get_stock_news, get_stock_fundamentals
+from data_fetcher import get_stock_price, get_top_gainers_losers_idx, get_stock_news, get_stock_fundamentals, get_financial_history
 from chart_generator import generate_chart, generate_portfolio_pie, generate_xray_image, generate_prediction_card
 from analyzer import analyze_stock, predict_future_price, scan_bsjp_strategy, scan_bpjs_strategy, scan_market_screener, scan_whale_flow, scan_top_picks, scan_sector_performance, calculate_fibonacci_levels, analyze_radar_metrics
 from market_pulse import calculate_market_mood, generate_gauge_chart
@@ -32,11 +32,12 @@ async def xray(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         # 1. Parallel Fetching for Speed
-        # We need Radar Scores AND Fibo Levels
+        # We need Radar Scores AND Fibo Levels AND Financials
         radar_task = asyncio.to_thread(analyze_radar_metrics, ticker)
         fibo_task = asyncio.to_thread(calculate_fibonacci_levels, ticker, period="6mo")
+        fin_task = asyncio.to_thread(get_financial_history, ticker)
         
-        radar_scores, fibo_data = await asyncio.gather(radar_task, fibo_task)
+        radar_scores, fibo_data, fin_data = await asyncio.gather(radar_task, fibo_task, fin_task)
         
         if not radar_scores:
             await waiting_msg.edit_text("❌ Data X-Ray tidak cukup.")
@@ -45,7 +46,7 @@ async def xray(update: Update, context: ContextTypes.DEFAULT_TYPE):
         fibo_levels = fibo_data['levels'] if fibo_data else None
         
         # 2. Generate Image
-        buf = await asyncio.to_thread(generate_xray_image, ticker, period="6mo", radar_scores=radar_scores, fibo_levels=fibo_levels)
+        buf = await asyncio.to_thread(generate_xray_image, ticker, period="6mo", radar_scores=radar_scores, fibo_levels=fibo_levels, financial_data=fin_data)
         
         if buf:
             caption = f"🩻 *NEXUS X-RAY: {ticker}* 🩻\n_All-in-One Deep Dive Analysis_"

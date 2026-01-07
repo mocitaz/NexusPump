@@ -60,6 +60,17 @@ def generate_chart(ticker, period="1mo", sup_res_levels=None, fibo_levels=None):
         df_full['macd_signal'] = macd.macd_signal()
         df_full['macd_hist'] = macd.macd_diff()
         
+        # V56: Pro Indicators (Bollinger & Stochastic)
+        # Bollinger Bands
+        bb = ta.volatility.BollingerBands(close, window=20, window_dev=2)
+        df_full['bb_upper'] = bb.bollinger_hband()
+        df_full['bb_lower'] = bb.bollinger_lband()
+        
+        # Stochastic Oscillator
+        stoch = ta.momentum.StochasticOscillator(high=df_full['High'], low=df_full['Low'], close=close, window=14, smooth_window=3)
+        df_full['stoch_k'] = stoch.stoch()
+        df_full['stoch_d'] = stoch.stoch_signal()
+        
         # 3. Slice Data for Display
         slice_map = {
             "1mo": 25, "3mo": 65, "6mo": 130, "1y": 250
@@ -73,14 +84,28 @@ def generate_chart(ticker, period="1mo", sup_res_levels=None, fibo_levels=None):
             
         # 4. Prepare AddPlots
         addplots = [
-            mpf.make_addplot(df_plot['MA20'], color='#00f2ff', width=1.5, panel=0), 
-            mpf.make_addplot(df_plot['MA50'], color='#ff9100', width=1.5, panel=0),
+            mpf.make_addplot(df_plot['MA20'], color='#00f2ff', width=1, panel=0), 
+            mpf.make_addplot(df_plot['MA50'], color='#ff9100', width=1, panel=0),
+            
+            # Bollinger Bands (Translucent Fill)
+            mpf.make_addplot(df_plot['bb_upper'], color='#ffffff', width=0.5, panel=0, linestyle='--'),
+            mpf.make_addplot(df_plot['bb_lower'], color='#ffffff', width=0.5, panel=0, linestyle='--'),
+            
+            # RSI (Compact)
             mpf.make_addplot(df_plot['rsi'], panel=2, color='#b026ff', ylabel='RSI', width=1.5),
             mpf.make_addplot([70]*len(df_plot), panel=2, color='#ff0055', linestyle='--', width=0.8),
             mpf.make_addplot([30]*len(df_plot), panel=2, color='#00ff44', linestyle='--', width=0.8),
+            
+            # MACD (Compact)
             mpf.make_addplot(df_plot['macd'], panel=3, color='#00f2ff', ylabel='MACD', width=1),
             mpf.make_addplot(df_plot['macd_signal'], panel=3, color='#ff9100', width=1),
             mpf.make_addplot(df_plot['macd_hist'], panel=3, type='bar', color='#444444', alpha=0.6),
+            
+            # Stochastic (New Panel 4)
+            mpf.make_addplot(df_plot['stoch_k'], panel=4, color='#00ff44', ylabel='Stoch', width=1),
+            mpf.make_addplot(df_plot['stoch_d'], panel=4, color='#ff0055', width=1),
+            mpf.make_addplot([80]*len(df_plot), panel=4, color='#ffffff', linestyle=':', width=0.5),
+            mpf.make_addplot([20]*len(df_plot), panel=4, color='#ffffff', linestyle=':', width=0.5),
         ]
         
         # 5. Visual Styling
@@ -111,7 +136,7 @@ def generate_chart(ticker, period="1mo", sup_res_levels=None, fibo_levels=None):
             volume=True,
             addplot=addplots,
             style=s,
-            panel_ratios=(5, 2, 2, 2), # More space for Price
+            panel_ratios=(5, 1, 1, 1, 1), # Adjusted for 5 Panels (Price, Vol, RSI, MACD, Stoch)
             datetime_format='%d-%b',
             tight_layout=True,
             scale_width_adjustment=dict(volume=0.7, candle=1.4),
@@ -160,7 +185,7 @@ def generate_chart(ticker, period="1mo", sup_res_levels=None, fibo_levels=None):
         logger.error(f"Chart Generation Error {ticker}: {e}")
         return None
 
-def generate_xray_image(ticker, period="6mo", radar_scores=None, fibo_levels=None):
+def generate_xray_image(ticker, period="6mo", radar_scores=None, fibo_levels=None, financial_data=None):
     """
     V33 NEXUS X-RAY: Premium Card UI Infographic
     Futuristic Trading Card Design with Glassmorphism and Neon Accents.
@@ -197,9 +222,10 @@ def generate_xray_image(ticker, period="6mo", radar_scores=None, fibo_levels=Non
         # Add Logo
         add_logo(fig, 'xray')
         
-        # Grid Layout
-        gs = gridspec.GridSpec(5, 2, height_ratios=[1.2, 0.8, 4, 3, 1])
-        gs.update(wspace=0.15, hspace=0.25, left=0.05, right=0.95, top=0.97, bottom=0.03)
+        # Grid Layout (Adjusted for Financials)
+        # Rows: Header, Price, Chart, Radar+Stats, Financials, Footer
+        gs = gridspec.GridSpec(6, 2, height_ratios=[1.2, 0.8, 4, 3, 2.5, 0.5])
+        gs.update(wspace=0.15, hspace=0.35, left=0.05, right=0.95, top=0.97, bottom=0.03)
         
         # --- helper: draw_card_bg ---
         def draw_card_bg(ax, title=None, color='#0f0f0f', alpha=0.8):
@@ -350,8 +376,46 @@ def generate_xray_image(ticker, period="6mo", radar_scores=None, fibo_levels=Non
                       fontweight='bold', ha='center', va='center', 
                       bbox=dict(boxstyle="round,pad=0.3", fc='#1a1a1a', ec=q_col, lw=2))
 
-        # --- F. FOOTER ---
-        ax_footer = fig.add_subplot(gs[4, :])
+        # --- F. FINANCIALS (New V56) ---
+        ax_fin = fig.add_subplot(gs[4, :])
+        ax_fin.axis('off')
+        draw_card_bg(ax_fin, title="FINANCIAL GROWTH (3Y)")
+        
+        if financial_data:
+            # Create sub-axes for bar chart
+            pos = ax_fin.get_position()
+            ax_fin_bar = fig.add_axes([pos.x0 + 0.05, pos.y0 + 0.05, pos.width - 0.1, pos.height - 0.1])
+            ax_fin_bar.set_facecolor('#0f0f0f')
+            
+            years = [str(y) for y in financial_data.get('years', [])]
+            revs = [r / 1_000_000_000_000 for r in financial_data.get('revenue', [])] # Trillions
+            profits = [p / 1_000_000_000_000 for p in financial_data.get('profit', [])] # Trillions
+            
+            x = np.arange(len(years))
+            width = 0.35
+            
+            # Bars
+            bars1 = ax_fin_bar.bar(x - width/2, revs, width, label='Revenue (T)', color='#00f2ff', alpha=0.8)
+            bars2 = ax_fin_bar.bar(x + width/2, profits, width, label='Profit (T)', color='#00ff44', alpha=0.8)
+            
+            # Labels
+            ax_fin_bar.set_xticks(x)
+            ax_fin_bar.set_xticklabels(years, color='white', fontsize=10)
+            ax_fin_bar.tick_params(axis='y', colors='#666666', labelsize=8)
+            ax_fin_bar.spines['top'].set_visible(False)
+            ax_fin_bar.spines['right'].set_visible(False)
+            ax_fin_bar.spines['bottom'].set_color('#333333')
+            ax_fin_bar.spines['left'].set_color('#333333')
+            
+            # Legend
+            ax_fin_bar.legend(loc='upper left', facecolor='#0a0a0a', edgecolor='#333333', labelcolor='white', fontsize=8)
+            ax_fin_bar.grid(axis='y', linestyle=':', color='#222222')
+            
+        else:
+            ax_fin.text(0.5, 0.5, "NO FINANCIAL DATA AVAILABLE", color='#555555', ha='center', va='center')
+
+        # --- G. FOOTER ---
+        ax_footer = fig.add_subplot(gs[5, :])
         ax_footer.axis('off')
         ax_footer.text(0.5, 0.3, "GENERATED BY NEXUS TRADING AI | POWERED BY DEEPMIND", 
                        color='#333333', fontsize=8, ha='center')
