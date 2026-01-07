@@ -72,3 +72,43 @@ def calculate_bsjp_winrate(ticker, period="3mo"):
     except Exception as e:
         logger.error(f"Backtest error for {ticker}: {e}")
         return None
+
+def calculate_bpjs_performance(ticker, period="6mo"):
+    """
+    V37: BPJS Backtest (Day Trading)
+    Strategy: Buy Open, Sell Close.
+    Win = Close > Open (Green Candle)
+    """
+    try:
+        from data_fetcher import get_historical_data
+        df = get_historical_data(ticker, period=period)
+        if df.empty or len(df) < 30: return None
+        
+        # Logic: If we bought Open and sold Close everyday on ACTIVE days
+        # Active Day = Vol > AvgVol(20)
+        df['Vol_Avg'] = df['Volume'].rolling(20).mean()
+        df['Active'] = df['Volume'] > df['Vol_Avg']
+        
+        # Filter active days
+        df_sim = df[df['Active']].copy()
+        # Fallback if too few active days
+        if len(df_sim) < 5: df_sim = df.copy()
+        
+        # Gain = % Change Open to Close
+        df_sim['Gain'] = ((df_sim['Close'] - df_sim['Open']) / df_sim['Open']) * 100
+        
+        # Win if Gain > 0.5% (considering potential fees, but simplified to > 0 for green day)
+        wins = len(df_sim[df_sim['Gain'] > 0])
+        total = len(df_sim)
+        
+        win_rate = (wins / total) * 100 if total > 0 else 0
+        avg_gain = df_sim['Gain'].mean()
+        
+        return {
+            "win_rate": win_rate,
+            "avg_gain": avg_gain,
+            "trades": total
+        }
+    except Exception as e:
+        logger.error(f"BPJS Backtest Error {ticker}: {e}")
+        return None

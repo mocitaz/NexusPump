@@ -203,6 +203,59 @@ def scan_bsjp_strategy(watchlist):
     candidates.sort(key=lambda x: x['win_prob'], reverse=True)
     return candidates
 
+def scan_bpjs_strategy(watchlist):
+    """
+    V37: BPJS SCANNER (Day Trading)
+    Filters for:
+    1. Gap Up / Strong Open (> 0.5%)
+    2. High Prob History (Win Rate > 60%)
+    """
+    from data_fetcher import get_batch_historical_data
+    from backtester import calculate_bpjs_performance
+    
+    candidates = []
+    
+    # 1. Active Market Scan (Batch)
+    batch_data = get_batch_historical_data(watchlist, period="2mo")
+    
+    for ticker, df in batch_data.items():
+        try:
+           if df.empty or len(df) < 5: continue
+           
+           last = df.iloc[-1]
+           prev = df.iloc[-2]
+           
+           if prev['Close'] == 0: continue
+           
+           # BPJS Logic (Intraday Momentum / Gap Up)
+           # If market lies, we rely on "Open > Prev Close"
+           gap = ((last['Open'] - prev['Close']) / prev['Close']) * 100
+           
+           # Filter: Must be Gap Up OR Strong Open Candle
+           # But since we scan likely during the day, we check current price too
+           current_chg = ((last['Close'] - prev['Close']) / prev['Close']) * 100
+           
+           # Criteria: Positive Momentum (> 0.5%) and Active Volume
+           if current_chg > 0.5:
+               # Deep Check: BPJS History
+               stats = calculate_bpjs_performance(ticker, period="6mo")
+               
+               if stats and stats['win_rate'] >= 60:
+                    candidates.append({
+                        "ticker": ticker,
+                        "price": last['Close'],
+                        "change": current_chg,
+                        "gap": gap,
+                        "win_rate": stats['win_rate'],
+                        "avg_gain": stats['avg_gain'],
+                        "trades": stats['trades']
+                    })
+        except Exception: continue
+        
+    # Sort by Win Rate then Change
+    candidates.sort(key=lambda x: (x['win_rate'], x['change']), reverse=True)
+    return candidates
+
 def scan_market_screener(watchlist):
     """
     Screener Logic (Unchanged from V16)

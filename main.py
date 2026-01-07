@@ -9,7 +9,7 @@ from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, Callb
 # Modules
 from data_fetcher import get_stock_price, get_top_gainers_losers_idx, get_stock_news, get_stock_fundamentals
 from chart_generator import generate_chart, generate_portfolio_pie, generate_xray_image, generate_prediction_card
-from analyzer import analyze_stock, predict_future_price, scan_bsjp_strategy, scan_market_screener, scan_whale_flow, scan_top_picks, scan_sector_performance, calculate_fibonacci_levels, analyze_radar_metrics
+from analyzer import analyze_stock, predict_future_price, scan_bsjp_strategy, scan_bpjs_strategy, scan_market_screener, scan_whale_flow, scan_top_picks, scan_sector_performance, calculate_fibonacci_levels, analyze_radar_metrics
 from market_pulse import calculate_market_mood, generate_gauge_chart
 from idx_tickers import IDX_WATCHLIST
 from alerts import StockMonitor, MarketSessionReporter
@@ -68,7 +68,7 @@ async def channel_command_dispatcher(update: Update, context: ContextTypes.DEFAU
     context.args = args
     cmd_map = {
         'start': start, 'harga': harga, 'chart': chart, 'analisa': analisa,
-        'news': news, 'predict': predict, 'screener': screener, 'bsjp': bsjp,
+        'news': news, 'predict': predict, 'screener': screener, 'bsjp': bsjp, 'bpjs': bpjs,
         'picks': picks, 'sector': sectors, 'pulse': pulse, 'flow': flow, 
         'buy': buy, 'sell': sell, 'porto': porto, 'fibo': fibo, 'xray': xray
     }
@@ -932,6 +932,41 @@ async def bsjp(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg += "━━━━━━━━━━━━━━━━━━━━━━\n⚠️ _Win Rate based on 6 Months Backtest._"
     await waiting.edit_text(msg, parse_mode='Markdown')
 
+async def bpjs(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    target_msg = update.message if update.message else update.callback_query.message
+    waiting = await target_msg.reply_text("☀️ *NEXUS DAY TRADER: Scanning BPJS Candidates...*", parse_mode='Markdown')
+    
+    try:
+        candidates = await asyncio.wait_for(
+            asyncio.to_thread(scan_bpjs_strategy, IDX_WATCHLIST),
+            timeout=180.0 # Longer timeout for backtests
+        )
+    except asyncio.TimeoutError:
+         await waiting.edit_text("⚠️ *Timeout*. Scan Day Trade terlalu berat. Coba lagi saat market sepi.")
+         return
+         
+    time_str = datetime.datetime.now(pytz.timezone('Asia/Jakarta')).strftime('%H:%M')
+    
+    if not candidates:
+        await waiting.edit_text(f"❌ *NO BPJS CANDIDATE*.\nMarket sedang tidak kondusif untuk 'Beli Pagi Jual Sore'.\n⏰ Checked: {time_str} WIB", parse_mode='Markdown')
+        return
+        
+    msg = f"☀️ *NEXUS BPJS (Day Trade Mode)*\n⏰ Pukul: {time_str} WIB\n━━━━━━━━━━━━━━━━━━━━━━\n"
+    for c in candidates[:10]: 
+        win_prob = c.get('win_rate', 0)
+        gap = c.get('gap', 0)
+        
+        icon = "🔥" if win_prob >= 70 else "☀️"
+        
+        msg += (
+            f"{icon} *{c['ticker']}* @ {c['price']:,.0f}\n"
+            f"   🚀 Volatility: +{c['change']:.1f}% (Gap: {gap:+.1f}%)\n"
+            f"   💰 Hist. Win Rate: *{win_prob:.1f}%* ({c['trades']} Days)\n"
+            f"   🎯 Est. Daily Gain: +{c['avg_gain']:.1f}%\n\n"
+        )
+    msg += "━━━━━━━━━━━━━━━━━━━━━━\n⚠️ _Win Rate: Probability of Closing Green (Open < Close)._"
+    await waiting.edit_text(msg, parse_mode='Markdown')
+
 async def picks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target_msg = update.message if update.message else update.callback_query.message
     waiting = await target_msg.reply_text("🔭 *Scanning Nexus Prime Watchlist (Tomorrow)...*", parse_mode='Markdown')
@@ -1058,6 +1093,7 @@ async def post_init(application):
         BotCommand("news", "Berita Saham Terkini"),
         BotCommand("screener", "Market Screener (Potensial)"),
         BotCommand("bsjp", "Sinyal Beli Sore Jual Pagi"),
+        BotCommand("bpjs", "Sinyal Beli Pagi Jual Sore (Day Trade)"),
         BotCommand("picks", "Rekomendasi Besok (Prime Picks)"),
         BotCommand("sectors", "Peta Rotasi Sektor"),
         BotCommand("pulse", "Market Fear & Greed"),
