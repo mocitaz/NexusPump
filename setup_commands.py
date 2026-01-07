@@ -11,6 +11,7 @@ async def setup():
     
     commands = [
         BotCommand("start", "Main Menu & Dashboard"),
+        BotCommand("ping", "Cek Status Bot (Alive?)"),
         BotCommand("harga", "Cek Harga & Fundamental"),
         BotCommand("chart", "Lihat Chart Teknikal"),
         BotCommand("analisa", "Analisis AI Lengkap"),

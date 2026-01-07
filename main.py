@@ -69,7 +69,7 @@ async def channel_command_dispatcher(update: Update, context: ContextTypes.DEFAU
     cmd_map = {
         'start': start, 'harga': harga, 'chart': chart, 'analisa': analisa,
         'news': news, 'predict': predict, 'screener': screener, 'bsjp': bsjp, 'bpjs': bpjs,
-        'break': break_session,
+        'break': break_session, 'ping': ping,
         'picks': picks, 'sector': sectors, 'pulse': pulse, 'flow': flow, 
         'buy': buy, 'sell': sell, 'porto': porto, 'fibo': fibo, 'xray': xray
     }
@@ -982,7 +982,11 @@ async def break_session(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from analyzer import scan_session_break
         from idx_tickers import IDX_WATCHLIST
         
-        candidates = await asyncio.to_thread(scan_session_break, IDX_WATCHLIST)
+        # V42 Safety: Add Timeout
+        candidates = await asyncio.wait_for(
+            asyncio.to_thread(scan_session_break, IDX_WATCHLIST),
+            timeout=60.0 # 1 minute max for session scan
+        )
         
         if not candidates:
             await msg.edit_text("😴 *Market Sepi Boss*.\nBelum ada rekomendasi yang 'Matang' di sesi 1 ini.")
@@ -1008,6 +1012,11 @@ async def break_session(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Break Scan Error: {e}")
         await msg.edit_text(f"❌ *Error scanning menu*: {e}")
+
+async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """V42: Health Check"""
+    latency = "⚡"
+    await update.message.reply_text(f"🏓 **PONG!**\nService Status: ONLINE ✅\nLatency: {latency}", parse_mode='Markdown')
 
 async def picks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target_msg = update.message if update.message else update.callback_query.message
