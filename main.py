@@ -1211,20 +1211,12 @@ if __name__ == '__main__':
     
     print("--- NEXUS PUMP BOT V19-V26 STARTING ---")
     
-    # V45: WEBHOOK AUTO-SWITCHING (Conflict Resolution)
-    # If running on Railway (Public Domain exists), use Webhook.
-    # If running Local, use Polling.
-    RAILWAY_DOMAIN = os.getenv("RAILWAY_PUBLIC_DOMAIN")
-    PORT = int(os.getenv("PORT", 8080))
+    # V51: REVERT TO POLLING (Cloud Mode)
+    # Webhook networking issues detected on Railway. 
+    # Since Local Bot is confirmed DEAD, Cloud Polling is SAFE and MORE STABLE for now.
+    print("☁️ CLOUD POLLING MODE ENABLED")
+    application.run_polling()
     
-    if RAILWAY_DOMAIN:
-        print(f"🌍 WEBHOOK MODE ENABLED (Domain: {RAILWAY_DOMAIN})")
-        application.run_webhook(
-            listen="0.0.0.0",
-            port=PORT,
-            url_path="webhook",
-            webhook_url=f"https://{RAILWAY_DOMAIN}/webhook"
-        )
-    else:
-        print("💻 POLLING MODE ENABLED (Local)")
-        application.run_polling()
+    # Legacy Webhook Code (Disabled for Stability)
+    # RAILWAY_DOMAIN = os.getenv("RAILWAY_PUBLIC_DOMAIN")
+    # ...
