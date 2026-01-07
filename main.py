@@ -1228,7 +1228,7 @@ async def generate_briefing():
                              ihsg_close = close_data.iloc[:, 0]
                         else:
                              ihsg_close = close_data
-                        # Fallback try checking columns directly
+                    else:
                         ihsg_close = ihsg_df.iloc[:, 0]
                 else:
                     ihsg_close = ihsg_df['Close']
