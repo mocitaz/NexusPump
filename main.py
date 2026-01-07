@@ -878,10 +878,10 @@ async def screener(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await waiting.edit_text("❌ *Market Screener*: Data tidak tersedia atau pasar tutup.", parse_mode='Markdown')
         return
         
-    header = "ROKET  HARGA  POT%  STS"
+    header = "KODE   HARGA  POT% Q-SCR"
     lines = []
     lines.append(header)
-    lines.append("-" * 25)
+    lines.append("-" * 28)
     
     for r in results[:15]:
         ticker = r['ticker'][:4]
@@ -890,23 +890,27 @@ async def screener(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else: p_str = f"{p_val:.0f}"
         pot_val = r['potential']
         pot_str = f"{pot_val:+.0f}%"
+        
+        # V60: Q-Score Display
+        q_score = r.get('q_score', 0)
+        q_star = "⭐" * q_score if q_score > 0 else "-"
+        
         bandar_icon = "🐳" if "AKUM" in r['bandar'] else "🔻" if "DIST" in r['bandar'] else "➖"
-        safety_icon = "✅" if "AMAN" in r['bsjp'] else "⚠️"
-        status = f"{bandar_icon}{safety_icon}"
-        line = f"{ticker:<5} {p_str:>6} {pot_str:>5}  {status}"
+        
+        line = f"{ticker:<5} {p_str:>6} {pot_str:>5}  {q_star}"
         lines.append(line)
         
-    lines.append("-" * 25)
+    lines.append("-" * 28)
     lines.append(f"📅 Data: {results[0]['date']} {datetime.datetime.now(pytz.timezone('Asia/Jakarta')).strftime('%H:%M')} WIB")
     
     table_block = "\n".join(lines)
     final_msg = (
-        "📟 *NEXUS SCREENER PRO*\n"
+        "📟 *NEXUS SCREENER PRO (V60)*\n"
         f"```\n{table_block}\n```\n"
         "📖 *Legenda*:\n"
-        "• `STS`: Status (Bandar 🐳/🔻 + Safety ✅/⚠️)\n"
-        "• `POT%`: Upside ke Resistance terdekat.\n"
-        "_Update Sesi Ini_"
+        "• `POT%`: Upside Potential.\n"
+        "• `Q-SCR`: Quality Score (⭐=Good Fund).\n"
+        "_Sorted by Fundamental + Technical_"
     )
     await waiting.edit_text(final_msg, parse_mode='Markdown')
 
