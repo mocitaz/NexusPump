@@ -135,11 +135,12 @@ def generate_chart(ticker, period="1mo", sup_res_levels=None, fibo_levels=None):
 
 def generate_xray_image(ticker, period="6mo", radar_scores=None, fibo_levels=None):
     """
-    V32 NEXUS X-RAY: Infographic Generator
-    Combines Price Chart, Radar Chart, and Key Stats in one vertical image.
+    V33 NEXUS X-RAY: Premium Card UI Infographic
+    Futuristic Trading Card Design with Glassmorphism and Neon Accents.
     """
     import matplotlib.pyplot as plt
     import matplotlib.gridspec as gridspec
+    import matplotlib.patches as patches
     import numpy as np
     from data_fetcher import get_historical_data
     
@@ -152,114 +153,175 @@ def generate_xray_image(ticker, period="6mo", radar_scores=None, fibo_levels=Non
         prev_price = df['Close'].iloc[-2]
         change_pct = ((last_price - prev_price) / prev_price) * 100
         change_str = f"{change_pct:+.2f}%"
-        color_change = "#00ff44" if change_pct >= 0 else "#ff0055"
+        color_change = "#00ffea" if change_pct >= 0 else "#ff0055"
         
-        # 2. Setup Figure (Portrait)
-        fig = plt.figure(figsize=(10, 18), facecolor='#0a0a0a')
-        gs = gridspec.GridSpec(4, 2, height_ratios=[1, 4, 3, 2])
+        # 2. Setup Figure (Premium Dark Card)
+        # Dimensions tailored for mobile screen (vertical)
+        fig = plt.figure(figsize=(10, 20), facecolor='#050505') # Ultra Dark Background
         
-        # --- A. HEADER (Top Full Width) ---
+        # Add Background Gradient/Texture effect (Simulated via overlay)
+        rect = fig.patch
+        rect.set_facecolor('#050505')
+        
+        # Grid Layout
+        gs = gridspec.GridSpec(5, 2, height_ratios=[1.2, 0.8, 4, 3, 1])
+        gs.update(wspace=0.15, hspace=0.25, left=0.05, right=0.95, top=0.97, bottom=0.03)
+        
+        # --- helper: draw_card_bg ---
+        def draw_card_bg(ax, title=None, color='#0f0f0f', alpha=0.8):
+            ax.set_facecolor(color)
+            ax.set_alpha(alpha)
+            # Rounded box simulation
+            box = patches.FancyBboxPatch((0, 0), 1, 1, boxstyle="round,pad=0.02,rounding_size=0.05", 
+                                         fc=color, ec='#1a1a1a', lw=1, transform=ax.transAxes, zorder=-1)
+            ax.add_patch(box)
+            if title:
+                ax.text(0.05, 0.92, title.upper(), transform=ax.transAxes, 
+                        color='#555555', fontsize=10, fontweight='bold')
+
+        # --- A. HEADER SECTION (Identity) ---
         ax_header = fig.add_subplot(gs[0, :])
-        ax_header.set_facecolor('#0a0a0a')
         ax_header.axis('off')
         
-        ax_header.text(0.5, 0.7, f"{ticker}", color='white', fontsize=48, 
+        # Ticker & Badge
+        ax_header.text(0.5, 0.65, ticker, color='white', fontsize=52, 
                        fontweight='bold', ha='center', va='center', fontfamily='sans-serif')
-        ax_header.text(0.5, 0.35, f"Rp {last_price:,.0f}", color='white', fontsize=36, 
+        ax_header.text(0.5, 0.35, "ID: STOCK MARKET ASSET", color='#888888', fontsize=12, 
                        ha='center', va='center')
-        ax_header.text(0.5, 0.15, change_str, color=color_change, fontsize=24, 
-                       fontweight='bold', ha='center', va='center')
                        
-        # --- B. MAIN CHART (Candles) ---
-        # Note: mpf is hard to integrate into existing fig as subplot easily without 'returnfig'.
-        # We will use mpf with 'external_axes' mode.
-        ax_main = fig.add_subplot(gs[1, :])
-        ax_vol =  ax_main.twinx() # Virtual axis for volume to not mess up
-        # Actually mpf allows passing [ax_main, ax_vol]
+        # Nexus Intelligence Badge
+        ax_header.text(0.95, 0.9, "NEXUS INTELLIGENCE", color='#00f2ff', fontsize=10, 
+                       ha='right', va='center', alpha=0.8, weight='bold')
+
+        # --- B. PRICE SECTION (Scoreboard) ---
+        ax_price = fig.add_subplot(gs[1, :])
+        ax_price.axis('off')
+        draw_card_bg(ax_price, color='#0a0a0a')
         
-        # Need to slice df for visual clarity
-        df_plot = df.tail(100)
+        # Price Display
+        ax_price.text(0.2, 0.5, "CURRENT PRICE", color='#555555', fontsize=10, ha='center', va='bottom')
+        ax_price.text(0.2, 0.25, f"{last_price:,.0f}", color='white', fontsize=38, ha='center', va='center', fontweight='bold')
         
-        # Custom Style for sub-plot
+        # Change Pct (Badge style)
+        bbox_props = dict(boxstyle="round,pad=0.4", fc=color_change, ec="none", alpha=0.2)
+        ax_price.text(0.8, 0.3, change_str, color=color_change, fontsize=28, 
+                      ha='center', va='center', fontweight='bold', bbox=bbox_props)
+        ax_price.text(0.8, 0.6, "24H CHANGE", color='#555555', fontsize=10, ha='center', va='bottom')
+
+        # --- C. MAIN CHART (Visual Deep Dive) ---
+        ax_main = fig.add_subplot(gs[2, :])
+        # Manually styling for "Card" look
+        ax_main.set_facecolor('#080808')
+        for spine in ax_main.spines.values():
+            spine.set_edgecolor('#222222')
+            
+        ax_main.text(0.02, 0.95, "PRICE ACTION & FIBONACCI", transform=ax_main.transAxes, 
+                     color='#444444', fontsize=9, fontweight='bold')
+        
+        df_plot = df.tail(80) # Zoom in for impact
+        
         mc = mpf.make_marketcolors(up='#00ff44', down='#ff0055', inherit=True)
-        s = mpf.make_mpf_style(base_mpf_style='nightclouds', marketcolors=mc, gridcolor='#2a2a2a')
+        s = mpf.make_mpf_style(base_mpf_style='nightclouds', marketcolors=mc, gridcolor='#151515', 
+                               rc={'font.size': 8, 'axes.labelcolor': '#444444'})
         
-        # Fibo Lines
+        # Prepare Fibo Lines
         hlines = []
         colors = []
         if fibo_levels:
             for k,v in fibo_levels.items():
                 hlines.append(v)
-                if "0.618" in k: colors.append('#ffd700')
-                else: colors.append('#ffffff')
-                
-        # Plotting
+                if "0.618" in k: colors.append('#ffd700') # Gold
+                elif "0.500" in k: colors.append('#ffffff') # White
+                else: colors.append('#333333') # Dim others
+        
+        # Plot Candles
         mpf.plot(df_plot, type='candle', style=s, ax=ax_main, volume=False, 
-                 hlines=dict(hlines=hlines, colors=colors, linewidths=0.7, linestyle='-.') if hlines else None)
+                 hlines=dict(hlines=hlines, colors=colors, linewidths=0.7, linestyle='--') if hlines else None)
         
-        ax_main.set_title("Price Action & Fibonacci", color='white', fontsize=12)
-        ax_main.tick_params(colors='white')
-        ax_main.grid(True, color='#222222', linestyle=':')
+        ax_main.yaxis.tick_right()
+        ax_main.tick_params(colors='#666666', labelsize=8)
+        ax_main.grid(True, color='#151515', linestyle='--')
+
+        # --- D. RADAR CHART (5-Factor Analysis) ---
+        # Create a polar axes inside the specific grid cell
+        # We need a dedicated frame for this
+        ax_radar_frame = fig.add_subplot(gs[3, 0])
+        ax_radar_frame.axis('off')
+        draw_card_bg(ax_radar_frame, title="NEXUS AI SCORE")
         
-        # --- C. RADAR CHART (Bottom Left) ---
-        # Radar Data
+        # The actual polar plot needs to be floating inside
+        pos = ax_radar_frame.get_position()
+        # [left, bottom, width, height]
+        ax_radar = fig.add_axes([pos.x0 + 0.02, pos.y0 + 0.02, pos.width - 0.04, pos.height - 0.06], polar=True)
+        
         categories = ['Valuation', 'Trend', 'Momentum', 'Volatility', 'Volume']
         if radar_scores:
             values = [radar_scores.get(c, 50) for c in categories]
         else:
             values = [50, 50, 50, 50, 50]
-            
-        # Close the loop
+        
+        # Make it a loop
         values += [values[0]]
         angles = np.linspace(0, 2 * np.pi, len(categories), endpoint=False).tolist()
         angles += [angles[0]]
         
-        ax_radar = fig.add_subplot(gs[2, 0], polar=True)
-        ax_radar.set_facecolor('#0a0a0a')
-        
-        # Draw Poly
-        ax_radar.plot(angles, values, color='#00f2ff', linewidth=2, linestyle='solid')
+        ax_radar.set_facecolor('#0f0f0f')
+        ax_radar.plot(angles, values, color='#00f2ff', linewidth=2)
         ax_radar.fill(angles, values, color='#00f2ff', alpha=0.3)
         
-        # Fix Labels
+        # Custom Grid
         ax_radar.set_xticks(angles[:-1])
-        ax_radar.set_xticklabels(categories, color='white', fontsize=10)
-        ax_radar.set_yticks([20, 40, 60, 80])
-        ax_radar.set_yticklabels(['', '', '', ''], color='#555555')
+        ax_radar.set_xticklabels(categories, color='#aaaaaa', fontsize=9, fontweight='bold')
+        ax_radar.set_yticks([30, 60, 90])
+        ax_radar.set_yticklabels(['', '', ''], color='#333333')
         ax_radar.spines['polar'].set_visible(False)
-        ax_radar.set_title("Nexus AI Score", color='white', pad=20)
+        ax_radar.grid(color='#222222', linestyle=':')
         
-        # --- D. KEY STATS (Bottom Right) ---
-        ax_stats = fig.add_subplot(gs[2, 1])
-        ax_stats.set_facecolor('#0a0a0a')
+        # Center Score
+        avg_score = int(np.mean(values[:-1])) if radar_scores else 50
+        ax_radar.text(0, 0, str(avg_score), color='white', fontsize=24, fontweight='bold', ha='center', va='center')
+
+        # --- E. STATS GRID (Insights) ---
+        ax_stats = fig.add_subplot(gs[3, 1])
         ax_stats.axis('off')
+        draw_card_bg(ax_stats, title="KEY INSIGHTS")
         
-        # Text Content
-        stats_text = (
-            f"📊 PERFORMANCE\n"
-            f"━━━━━━━━━━\n"
-            f"• Score: {np.mean(values[:-1]):.0f}/100\n"
-            f"• Trend: {radar_scores.get('Trend', 0)}\n"
-            f"• Vol  : {radar_scores.get('Volume', 0)}\n\n"
-            f"💡 INSIGHT\n"
-            f"Valuation is {'Cheap' if radar_scores.get('Valuation',0) > 60 else 'Expensive'}.\n"
-            f"Momentum is {'Strong' if radar_scores.get('Momentum',0) > 60 else 'Weak'}."
-        )
+        # Helper to draw stat row
+        def draw_stat_row(ax, y, label, value, color='white'):
+            ax.text(0.1, y, label, color='#666666', fontsize=10, transform=ax.transAxes)
+            ax.text(0.9, y, value, color=color, fontsize=10, fontweight='bold', ha='right', transform=ax.transAxes)
+            
+        trend_val = radar_scores.get('Trend', 50)
+        mom_val = radar_scores.get('Momentum', 50)
+        vol_val = radar_scores.get('Volatility', 50)
         
-        ax_stats.text(0.1, 0.5, stats_text, color='white', fontsize=14, 
-                      fontfamily='monospace', va='center')
+        trend_str = "BULLISH" if trend_val > 60 else "BEARISH" if trend_val < 40 else "SIDEWAYS"
+        trend_col = "#00ff44" if trend_val > 60 else "#ff0055" if trend_val < 40 else "#ffffff"
         
-        # --- E. FOOTER ---
-        ax_footer = fig.add_subplot(gs[3, :])
-        ax_footer.set_facecolor('#0a0a0a')
+        mom_str = "STRONG" if mom_val > 60 else "WEAK"
+        
+        draw_stat_row(ax_stats, 0.75, "PRIMARY TREND", trend_str, trend_col)
+        draw_stat_row(ax_stats, 0.60, "MOMENTUM", mom_str)
+        draw_stat_row(ax_stats, 0.45, "VOLATILITY", f"{vol_val:.1f}")
+        draw_stat_row(ax_stats, 0.30, "VOLUME FLOW", f"{radar_scores.get('Volume', 0)}")
+        
+        # Quality Badge
+        q_score = "A" if avg_score > 80 else "B" if avg_score > 60 else "C" if avg_score > 40 else "D"
+        q_col = "#00ff44" if q_score in ["A", "B"] else "#ff9100"
+        
+        ax_stats.text(0.5, 0.1, f"RATING: {q_score}", color=q_col, fontsize=18, 
+                      fontweight='bold', ha='center', va='center', 
+                      bbox=dict(boxstyle="round,pad=0.3", fc='#1a1a1a', ec=q_col, lw=2))
+
+        # --- F. FOOTER ---
+        ax_footer = fig.add_subplot(gs[4, :])
         ax_footer.axis('off')
-        ax_footer.text(0.5, 0.5, "GENERATED BY NEXUS TRADING AI", color='#555555', 
-                       fontsize=10, ha='center')
-        
+        ax_footer.text(0.5, 0.3, "GENERATED BY NEXUS TRADING AI | POWERED BY DEEPMIND", 
+                       color='#333333', fontsize=8, ha='center')
+
         # Save
-        plt.tight_layout()
         buf = io.BytesIO()
-        plt.savefig(buf, format='png', dpi=100, facecolor='#0a0a0a')
+        plt.savefig(buf, format='png', dpi=120, facecolor='#050505', bbox_inches='tight')
         buf.seek(0)
         plt.close(fig)
         return buf
