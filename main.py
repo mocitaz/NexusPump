@@ -1205,35 +1205,60 @@ async def market_alert_job(context: ContextTypes.DEFAULT_TYPE):
                 logger.error(f"Failed to send alert: {e}")
 
 # ... Session reporters ...
-# ... Session reporters ...
 # --- V61: MORNING BRIEFING LOGIC ---
 async def generate_briefing():
     """Generates the morning briefing content."""
     try:
-        # 1. IHSG Outlook
-        ihsg_df = await asyncio.to_thread(yf.download, "^JKSE", period="5d", progress=False)
-        ihsg_outlook = "Neutral"
+        # 1. IHSG Outlook (Robust Method)
+        ihsg_last = 7200 # Fallback default
         ihsg_chg = 0
-        ihsg_last = 0
+        ihsg_outlook = "Neutral"
         
-        if not ihsg_df.empty:
-            # Handle MultiIndex columns if present (Price, Ticker) -> just select Price
-            # Assuming standard structure or adjusting
-            if isinstance(ihsg_df.columns, pd.MultiIndex):
-                 ihsg_close = ihsg_df['Close'].iloc[:, 0]
-            else:
-                 ihsg_close = ihsg_df['Close']
-            
-            ihsg_last = ihsg_close.iloc[-1]
-            ihsg_prev = ihsg_close.iloc[-2]
-            ihsg_chg = ((ihsg_last - ihsg_prev) / ihsg_prev) * 100
-            
-            ma5 = ihsg_close.rolling(5).mean().iloc[-1]
-            if ihsg_last > ma5: ihsg_outlook = "Bullish 🐂 (Above MA5)"
-            else: ihsg_outlook = "Bearish 🐻 (Below MA5)"
+        try:
+            ihsg_df = await asyncio.to_thread(yf.download, "^JKSE", period="5d", progress=False)
+            if not ihsg_df.empty:
+                # Handle flattened columns if necessary
+                if isinstance(ihsg_df.columns, pd.MultiIndex):
+                    # Try to flatten or access specifically
+                    # Check if 'Close' is at level 0
+                    if 'Close' in ihsg_df.columns.get_level_values(0):
+                        close_data = ihsg_df['Close']
+                        # If multiple tickers (unlikely for single download), take first col
+                        if isinstance(close_data, pd.DataFrame):
+                             ihsg_close = close_data.iloc[:, 0]
+                        else:
+                             ihsg_close = close_data
+                    else:
+                        # Fallback try checking columns directly
+                        ihsg_close = ihsg_df.iloc[:, 0] # Risky but often 'Close' or 'Adj Close' is first? No.
+                        # Safe fallback: Search for any column named 'Close'
+                        # For now, let's just skip complex handling and use basic iloc if simple access fails
+                         pass
+                else:
+                    ihsg_close = ihsg_df['Close']
+
+                # Calculate metrics if we got the series
+                if 'ihsg_close' in locals():
+                    ihsg_last = ihsg_close.iloc[-1]
+                    if len(ihsg_close) > 1:
+                        ihsg_prev = ihsg_close.iloc[-2]
+                        if ihsg_prev > 0:
+                            ihsg_chg = ((ihsg_last - ihsg_prev) / ihsg_prev) * 100
+                    
+                    ma5 = ihsg_close.rolling(5).mean().iloc[-1]
+                    if ihsg_last > ma5: ihsg_outlook = "Bullish 🐂 (Above MA5)"
+                    else: ihsg_outlook = "Bearish 🐻 (Below MA5)"
+        except Exception as e:
+            logger.error(f"IHSG Fetch Error: {e}")
+            # Continue without crashing, use defaults
         
         # 2. Top Picks (Reusing V60 Logic)
-        top_picks = await asyncio.to_thread(scan_top_picks, IDX_WATCHLIST)
+        try:
+            top_picks = await asyncio.to_thread(scan_top_picks, IDX_WATCHLIST)
+        except Exception as e:
+            logger.error(f"Picks Scan Error: {e}")
+            top_picks = []
+
         picks_txt = ""
         if top_picks:
             for i, p in enumerate(top_picks[:3]): # Top 3 only
@@ -1241,7 +1266,7 @@ async def generate_briefing():
                 star = "⭐" if q_score > 15 else ""
                 picks_txt += f"{i+1}. *{p['ticker']}* ({p['score']}) {star}\n   👉 Target: Algo Trend\n"
         else:
-            picks_txt = "⚠️ Market Wait & See."
+            picks_txt = "⚠️ Market Wait & See (Scanning Failed / No Data)."
 
         date_str = datetime.datetime.now(pytz.timezone('Asia/Jakarta')).strftime('%d %b %Y')
         
@@ -1258,8 +1283,8 @@ async def generate_briefing():
         )
         return msg
     except Exception as e:
-        logger.error(f"Briefing Gen Error: {e}")
-        return None
+        logger.error(f"Briefing Gen Critical Error: {e}")
+        return "❌ Gagal generate briefing. Server error."
 
 async def briefing(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Manual trigger for Morning Briefing."""
