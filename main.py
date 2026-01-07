@@ -8,12 +8,81 @@ from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, Callb
 
 # Modules
 from data_fetcher import get_stock_price, get_top_gainers_losers_idx, get_stock_news, get_stock_fundamentals
-from chart_generator import generate_chart, generate_portfolio_pie
-from analyzer import analyze_stock, predict_future_price, scan_bsjp_strategy, scan_market_screener, scan_whale_flow, scan_top_picks, scan_sector_performance, calculate_fibonacci_levels
+from chart_generator import generate_chart, generate_portfolio_pie, generate_xray_image
+from analyzer import analyze_stock, predict_future_price, scan_bsjp_strategy, scan_market_screener, scan_whale_flow, scan_top_picks, scan_sector_performance, calculate_fibonacci_levels, analyze_radar_metrics
 from market_pulse import calculate_market_mood, generate_gauge_chart
 from idx_tickers import IDX_WATCHLIST
 from alerts import StockMonitor, MarketSessionReporter
 from portfolio_manager import PortfolioManager
+
+# ...
+
+async def xray(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Support callback override
+    args = context.args if hasattr(context, 'args') and context.args else context.args
+    
+    if not args:
+         if update.message:
+            await update.message.reply_text("🩻 Gunakan format: `/xray <kode saham>`", parse_mode='Markdown')
+         return
+
+    ticker = args[0].upper()
+    target_msg = update.message if update.message else update.callback_query.message
+    waiting_msg = await target_msg.reply_text(f"🩻 *Initiating Nexus X-Ray for {ticker}...*\n_Generating Infographic..._", parse_mode='Markdown')
+    
+    try:
+        # 1. Parallel Fetching for Speed
+        # We need Radar Scores AND Fibo Levels
+        radar_task = asyncio.to_thread(analyze_radar_metrics, ticker)
+        fibo_task = asyncio.to_thread(calculate_fibonacci_levels, ticker, period="6mo")
+        
+        radar_scores, fibo_data = await asyncio.gather(radar_task, fibo_task)
+        
+        if not radar_scores:
+            await waiting_msg.edit_text("❌ Data X-Ray tidak cukup.")
+            return
+            
+        fibo_levels = fibo_data['levels'] if fibo_data else None
+        
+        # 2. Generate Image
+        buf = await asyncio.to_thread(generate_xray_image, ticker, period="6mo", radar_scores=radar_scores, fibo_levels=fibo_levels)
+        
+        if buf:
+            caption = f"🩻 *NEXUS X-RAY: {ticker}* 🩻\n_All-in-One Deep Dive Analysis_"
+            await target_msg.reply_photo(photo=buf, caption=caption, parse_mode='Markdown')
+            await waiting_msg.delete()
+        else:
+             await waiting_msg.edit_text("❌ Gagal membuat X-Ray Infographic.")
+             
+    except Exception as e:
+        logger.error(f"XRay Handler Error: {e}")
+        await waiting_msg.edit_text("❌ Error system.")
+
+async def channel_command_dispatcher(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.channel_post or not update.channel_post.text: return
+    text = update.channel_post.text
+    if not text.startswith('/'): return
+    parts = text.split()
+    command = parts[0].lower().split('@')[0].replace('/', '')
+    args = parts[1:]
+    context.args = args
+    cmd_map = {
+        'start': start, 'harga': harga, 'chart': chart, 'analisa': analisa,
+        'news': news, 'predict': predict, 'screener': screener, 'bsjp': bsjp,
+        'picks': picks, 'sector': sectors, 'pulse': pulse, 'flow': flow, 
+        'buy': buy, 'sell': sell, 'porto': porto, 'fibo': fibo, 'xray': xray
+    }
+    if command in cmd_map:
+        await cmd_map[command](update, context)
+
+# ... (rest of code)
+
+    application.add_handler(CommandHandler('fibo', fibo))
+    application.add_handler(CommandHandler('xray', xray)) # NEW
+    
+    # Portfolio Handlers
+    application.add_handler(CommandHandler('buy', buy))
+
 
 # ... (Previous code) ...
 

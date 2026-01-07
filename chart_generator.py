@@ -130,6 +130,145 @@ def generate_chart(ticker, period="1mo", sup_res_levels=None, fibo_levels=None):
         return buf
         
     except Exception as e:
+        logger.error(f"Chart Generation Error {ticker}: {e}")
+        return None
+
+def generate_xray_image(ticker, period="6mo", radar_scores=None, fibo_levels=None):
+    """
+    V32 NEXUS X-RAY: Infographic Generator
+    Combines Price Chart, Radar Chart, and Key Stats in one vertical image.
+    """
+    import matplotlib.pyplot as plt
+    import matplotlib.gridspec as gridspec
+    import numpy as np
+    from data_fetcher import get_historical_data
+    
+    try:
+        # 1. Fetch Data
+        df = get_historical_data(ticker, period=period)
+        if df.empty: return None
+        
+        last_price = df['Close'].iloc[-1]
+        prev_price = df['Close'].iloc[-2]
+        change_pct = ((last_price - prev_price) / prev_price) * 100
+        change_str = f"{change_pct:+.2f}%"
+        color_change = "#00ff44" if change_pct >= 0 else "#ff0055"
+        
+        # 2. Setup Figure (Portrait)
+        fig = plt.figure(figsize=(10, 18), facecolor='#0a0a0a')
+        gs = gridspec.GridSpec(4, 2, height_ratios=[1, 4, 3, 2])
+        
+        # --- A. HEADER (Top Full Width) ---
+        ax_header = fig.add_subplot(gs[0, :])
+        ax_header.set_facecolor('#0a0a0a')
+        ax_header.axis('off')
+        
+        ax_header.text(0.5, 0.7, f"{ticker}", color='white', fontsize=48, 
+                       fontweight='bold', ha='center', va='center', fontfamily='sans-serif')
+        ax_header.text(0.5, 0.35, f"Rp {last_price:,.0f}", color='white', fontsize=36, 
+                       ha='center', va='center')
+        ax_header.text(0.5, 0.15, change_str, color=color_change, fontsize=24, 
+                       fontweight='bold', ha='center', va='center')
+                       
+        # --- B. MAIN CHART (Candles) ---
+        # Note: mpf is hard to integrate into existing fig as subplot easily without 'returnfig'.
+        # We will use mpf with 'external_axes' mode.
+        ax_main = fig.add_subplot(gs[1, :])
+        ax_vol =  ax_main.twinx() # Virtual axis for volume to not mess up
+        # Actually mpf allows passing [ax_main, ax_vol]
+        
+        # Need to slice df for visual clarity
+        df_plot = df.tail(100)
+        
+        # Custom Style for sub-plot
+        mc = mpf.make_marketcolors(up='#00ff44', down='#ff0055', inherit=True)
+        s = mpf.make_mpf_style(base_mpf_style='nightclouds', marketcolors=mc, gridcolor='#2a2a2a')
+        
+        # Fibo Lines
+        hlines = []
+        colors = []
+        if fibo_levels:
+            for k,v in fibo_levels.items():
+                hlines.append(v)
+                if "0.618" in k: colors.append('#ffd700')
+                else: colors.append('#ffffff')
+                
+        # Plotting
+        mpf.plot(df_plot, type='candle', style=s, ax=ax_main, volume=False, 
+                 hlines=dict(hlines=hlines, colors=colors, linewidths=0.7, linestyle='-.') if hlines else None)
+        
+        ax_main.set_title("Price Action & Fibonacci", color='white', fontsize=12)
+        ax_main.tick_params(colors='white')
+        ax_main.grid(True, color='#222222', linestyle=':')
+        
+        # --- C. RADAR CHART (Bottom Left) ---
+        # Radar Data
+        categories = ['Valuation', 'Trend', 'Momentum', 'Volatility', 'Volume']
+        if radar_scores:
+            values = [radar_scores.get(c, 50) for c in categories]
+        else:
+            values = [50, 50, 50, 50, 50]
+            
+        # Close the loop
+        values += [values[0]]
+        angles = np.linspace(0, 2 * np.pi, len(categories), endpoint=False).tolist()
+        angles += [angles[0]]
+        
+        ax_radar = fig.add_subplot(gs[2, 0], polar=True)
+        ax_radar.set_facecolor('#0a0a0a')
+        
+        # Draw Poly
+        ax_radar.plot(angles, values, color='#00f2ff', linewidth=2, linestyle='solid')
+        ax_radar.fill(angles, values, color='#00f2ff', alpha=0.3)
+        
+        # Fix Labels
+        ax_radar.set_xticks(angles[:-1])
+        ax_radar.set_xticklabels(categories, color='white', fontsize=10)
+        ax_radar.set_yticks([20, 40, 60, 80])
+        ax_radar.set_yticklabels(['', '', '', ''], color='#555555')
+        ax_radar.spines['polar'].set_visible(False)
+        ax_radar.set_title("Nexus AI Score", color='white', pad=20)
+        
+        # --- D. KEY STATS (Bottom Right) ---
+        ax_stats = fig.add_subplot(gs[2, 1])
+        ax_stats.set_facecolor('#0a0a0a')
+        ax_stats.axis('off')
+        
+        # Text Content
+        stats_text = (
+            f"📊 PERFORMANCE\n"
+            f"━━━━━━━━━━\n"
+            f"• Score: {np.mean(values[:-1]):.0f}/100\n"
+            f"• Trend: {radar_scores.get('Trend', 0)}\n"
+            f"• Vol  : {radar_scores.get('Volume', 0)}\n\n"
+            f"💡 INSIGHT\n"
+            f"Valuation is {'Cheap' if radar_scores.get('Valuation',0) > 60 else 'Expensive'}.\n"
+            f"Momentum is {'Strong' if radar_scores.get('Momentum',0) > 60 else 'Weak'}."
+        )
+        
+        ax_stats.text(0.1, 0.5, stats_text, color='white', fontsize=14, 
+                      fontfamily='monospace', va='center')
+        
+        # --- E. FOOTER ---
+        ax_footer = fig.add_subplot(gs[3, :])
+        ax_footer.set_facecolor('#0a0a0a')
+        ax_footer.axis('off')
+        ax_footer.text(0.5, 0.5, "GENERATED BY NEXUS TRADING AI", color='#555555', 
+                       fontsize=10, ha='center')
+        
+        # Save
+        plt.tight_layout()
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=100, facecolor='#0a0a0a')
+        buf.seek(0)
+        plt.close(fig)
+        return buf
+        
+    except Exception as e:
+        logger.error(f"X-Ray Generation Error {ticker}: {e}")
+        return None
+        
+    except Exception as e:
         logger.error(f"Error generating chart for {ticker}: {e}")
         return None
 

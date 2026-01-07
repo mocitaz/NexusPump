@@ -568,3 +568,102 @@ def calculate_fibonacci_levels(ticker, period="6mo"):
     except Exception as e:
         logger.error(f"Fibonacci Error {ticker}: {e}")
         return None
+
+def analyze_radar_metrics(ticker):
+    """
+    V32 X-RAY: Radar Chart Metrics (0-100 Scale)
+    Returns dict for visual plotting.
+    """
+    from data_fetcher import get_historical_data, get_stock_fundamentals
+    import numpy as np
+    
+    try:
+        # 1. Fetch Tech Data
+        df = get_historical_data(ticker, period="6mo")
+        if df.empty or len(df) < 50: return None
+        
+        # 2. Fetch Fundamentals
+        fund = get_stock_fundamentals(ticker) # {'pe': 15, 'pbv': 2...} or None
+        
+        scores = {
+            "Valuation": 50, "Trend": 50, "Momentum": 50, "Volatility": 50, "Volume": 50
+        }
+        
+        # --- A. VALUATION (Fundamental) ---
+        if fund:
+            val_score = 50
+            # PE Ratio (Lower is Better, typically)
+            pe = fund.get('trailingPE')
+            if pe:
+                if pe < 10: val_score += 30
+                elif pe < 20: val_score += 10
+                elif pe > 40: val_score -= 20
+            
+            # PBV (Lower is Better)
+            pbv = fund.get('priceToBook')
+            if pbv:
+                if pbv < 1: val_score += 20
+                elif pbv > 5: val_score -= 10
+                
+            scores['Valuation'] = max(10, min(95, val_score))
+        else:
+            scores['Valuation'] = 50 # Neutral if no data
+            
+        # --- B. TREND (MA Alignment) ---
+        close = df['Close']
+        ma20 = close.rolling(20).mean().iloc[-1]
+        ma50 = close.rolling(50).mean().iloc[-1]
+        ma200 = close.rolling(200).mean().iloc[-1]
+        price = close.iloc[-1]
+        
+        trend_score = 30
+        if price > ma20: trend_score += 20
+        if price > ma50: trend_score += 20
+        if price > ma200: trend_score += 30 # Strong Bull
+        scores['Trend'] = trend_score
+        
+        # --- C. MOMENTUM (RSI + MACD) ---
+        rsi = ta.momentum.RSIIndicator(close, window=14).rsi().iloc[-1]
+        macd = ta.trend.MACD(close)
+        macd_diff = macd.macd_diff().iloc[-1]
+        
+        mom_score = 50
+        # RSI 50-70 is sweet spot
+        if 50 <= rsi <= 70: mom_score += 30
+        elif rsi > 70: mom_score += 10 # Overbought but strong
+        elif rsi < 30: mom_score -= 20 # Oversold (unless reversal)
+        
+        if macd_diff > 0: mom_score += 20
+        scores['Momentum'] = max(10, min(95, mom_score))
+        
+        # --- D. VOLATILITY (Stability = High Score) ---
+        # If volatile, score low (Risk). If stable uptrend, score high.
+        # Use Bollinger width or ATR check.
+        # Simplified: Daily Return Std Dev
+        returns = close.pct_change().tail(30)
+        std_dev = returns.std() * 100 # e.g. 2.5%
+        
+        # Lower std dev is better stability? Depends. 
+        # For "Quality", Stability is good.
+        vol_score = 100 - (std_dev * 10) # If std=2%, score=80. If std=5%, score=50.
+        scores['Volatility'] = max(10, min(95, vol_score))
+        
+        # --- E. VOLUME (Flow) ---
+        avg_vol = df['Volume'].rolling(20).mean().iloc[-1]
+        curr_vol = df['Volume'].iloc[-1]
+        
+        vol_score = 50
+        ratio = curr_vol / avg_vol if avg_vol > 0 else 1
+        
+        if ratio > 1.0: vol_score += 10
+        if ratio > 2.0: vol_score += 20
+        if ratio > 5.0: vol_score += 20 # Massive
+        
+        # OBV Slope check could be better but Ratio is simple
+        scores['Volume'] = max(10, min(95, vol_score))
+        
+        return scores
+        
+    except Exception as e:
+        logger.error(f"Radar Analysis Error {ticker}: {e}")
+        return None
