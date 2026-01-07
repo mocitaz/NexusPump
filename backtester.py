@@ -73,7 +73,7 @@ def calculate_bsjp_winrate(ticker, period="3mo"):
         logger.error(f"Backtest error for {ticker}: {e}")
         return None
 
-def calculate_bpjs_performance(ticker, period="6mo"):
+def calculate_bpjs_performance(ticker, period="6mo", df=None):
     """
     V37: BPJS Backtest (Day Trading)
     Strategy: Buy Open, Sell Close.
@@ -81,7 +81,10 @@ def calculate_bpjs_performance(ticker, period="6mo"):
     """
     try:
         from data_fetcher import get_historical_data
-        df = get_historical_data(ticker, period=period)
+        
+        if df is None:
+            df = get_historical_data(ticker, period=period)
+            
         if df.empty or len(df) < 30: return None
         
         # Logic: If we bought Open and sold Close everyday on ACTIVE days

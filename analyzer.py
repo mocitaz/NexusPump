@@ -215,8 +215,9 @@ def scan_bpjs_strategy(watchlist):
     
     candidates = []
     
-    # 1. Active Market Scan (Batch)
-    batch_data = get_batch_historical_data(watchlist, period="2mo")
+    # 1. Active Market Scan (Batch - 6mo for Backtest)
+    # Fetching 6mo upfront avoids N+1 requests later
+    batch_data = get_batch_historical_data(watchlist, period="6mo")
     
     for ticker, df in batch_data.items():
         try:
@@ -228,19 +229,16 @@ def scan_bpjs_strategy(watchlist):
            if prev['Close'] == 0: continue
            
            # BPJS Logic (Intraday Momentum / Gap Up)
-           # If market lies, we rely on "Open > Prev Close"
            gap = ((last['Open'] - prev['Close']) / prev['Close']) * 100
-           
-           # Filter: Must be Gap Up OR Strong Open Candle
-           # But since we scan likely during the day, we check current price too
            current_chg = ((last['Close'] - prev['Close']) / prev['Close']) * 100
            
-           # Criteria: Positive Momentum (> 0.2%) - Relaxed from 0.5%
+           # Criteria: Positive Momentum (> 0.2%) - Relaxed
            if current_chg > 0.2:
-               # Deep Check: BPJS History
-               stats = calculate_bpjs_performance(ticker, period="6mo")
+               # Deep Check: BPJS History (Pass existing DF!)
+               # No extra network call needed here
+               stats = calculate_bpjs_performance(ticker, period="6mo", df=df)
                
-               if stats and stats['win_rate'] >= 50: # Relaxed from 60
+               if stats and stats['win_rate'] >= 45: # Relaxed to 45% to see more candidates
                     candidates.append({
                         "ticker": ticker,
                         "price": last['Close'],
