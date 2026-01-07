@@ -790,23 +790,28 @@ async def gainers(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
         
     # Build msg
-    lines = ["RANK  KODE   HARGA   NAIK%", "-" * 28]
+    # Build msg
+    time_str = datetime.datetime.now(pytz.timezone('Asia/Jakarta')).strftime('%H:%M')
+    msg = f"🚀 *TOP GAINERS HARI INI* | ⏰ {time_str} WIB\n━━━━━━━━━━━━━━━━━━━━━━\n"
+    
     for i, s in enumerate(g):
         rank = f"#{i+1}"
-        tick = s['ticker'][:4]
-        price = f"{s['price']/1000:.1f}K" if s['price'] > 1000 else f"{s['price']:.0f}"
-        chg = f"+{s['change_pct']:.1f}%"
-        lines.append(f"{rank:<4} {tick:<5} {price:>6} {chg:>6}")
+        tick = s['ticker']
+        price = f"{s['price']:,.0f}"
+        chg = s['change_pct']
+        
+        # V60: Fundamental Info
+        pe = s.get('pe', 0)
+        roe = s.get('roe', 0)
+        reason = s.get('reason', 'N/A')
+        
+        msg += (
+            f"{rank} *{tick}* (+{chg:.1f}%) @ Rp {price}\n"
+            f"   📊 PE {pe:.1f} | ROE {roe*100:.1f}%\n"
+            f"   💡 _{reason}_\n\n"
+        )
     
-    lines.append("-" * 28)
-    time_str = datetime.datetime.now(pytz.timezone('Asia/Jakarta')).strftime('%H:%M')
-    lines.append(f"⏰ {time_str} WIB")
-    
-    msg = (
-        "🚀 *TOP GAINERS HARI INI*\n"
-        f"```\n{chr(10).join(lines)}\n```\n"
-        "_Delay data 15 menit_"
-    )
+    msg += "━━━━━━━━━━━━━━━━━━━━━━\n_Delay data 15 menit_"
     await waiting.edit_text(msg, parse_mode='Markdown')
 
 async def losers(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -832,19 +837,27 @@ async def losers(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await waiting.edit_text("❌ Data pasar tidak tersedia.")
         return
         
-    lines = ["RANK  KODE   HARGA   TURUN%", "-" * 28]
+    time_str = datetime.datetime.now(pytz.timezone('Asia/Jakarta')).strftime('%H:%M')
+    msg = f"🔻 *TOP LOSERS HARI INI* | ⏰ {time_str} WIB\n━━━━━━━━━━━━━━━━━━━━━━\n"
+    
     for i, s in enumerate(l):
         rank = f"#{i+1}"
-        tick = s['ticker'][:4]
-        price = f"{s['price']/1000:.1f}K" if s['price'] > 1000 else f"{s['price']:.0f}"
-        chg = f"{s['change_pct']:.1f}%"
-        lines.append(f"{rank:<4} {tick:<5} {price:>6} {chg:>6}")
+        tick = s['ticker']
+        price = f"{s['price']:,.0f}"
+        chg = s['change_pct']
+        
+        # V60: Fundamental Info
+        pe = s.get('pe', 0)
+        roe = s.get('roe', 0)
+        reason = s.get('reason', 'N/A')
+        
+        msg += (
+            f"{rank} *{tick}* ({chg:.1f}%) @ Rp {price}\n"
+            f"   📊 PE {pe:.1f} | ROE {roe*100:.1f}%\n"
+            f"   💡 _{reason}_\n\n"
+        )
     
-    lines.append("-" * 28)
-    time_str = datetime.datetime.now(pytz.timezone('Asia/Jakarta')).strftime('%H:%M')
-    lines.append(f"⏰ {time_str} WIB")
-    
-    msg = "🔻 *TOP LOSERS HARI INI*\n" + f"```\n{chr(10).join(lines)}\n```\n"
+    msg += "━━━━━━━━━━━━━━━━━━━━━━\n_Delay data 15 menit_"
     await waiting.edit_text(msg, parse_mode='Markdown')
 
 async def screener(update: Update, context: ContextTypes.DEFAULT_TYPE):

@@ -233,14 +233,38 @@ def get_top_gainers_losers_idx():
                 })
             except Exception: continue
             
-        # 3. Sort
+    # Sort    
         final_df = pd.DataFrame(res_data)
         if final_df.empty: return [], []
         
         final_df = final_df.sort_values(by="change_pct", ascending=False)
         
+        # V60: FETCH FUNDAMENTALS FOR TOP 5 (Sequential to avoid spam)
+        # Only fetch for the ones we will display
         gainers = final_df.head(5).to_dict(orient="records")
         losers = final_df.tail(5).sort_values(by="change_pct", ascending=True).to_dict(orient="records")
+        
+        for item in gainers + losers:
+            try:
+                info = get_stock_fundamentals(item['ticker'])
+                item['pe'] = info.get('pe_ratio', 0)
+                item['roe'] = info.get('roe', 0)
+                item['sector'] = info.get('sector', 'Unknown')
+                
+                # Simple reasoning
+                if item['change_pct'] > 0:
+                    if item['pe'] > 0 and item['pe'] < 15: item['reason'] = "Undervalued Rally"
+                    elif item['pe'] > 50: item['reason'] = "Speculative Pump"
+                    else: item['reason'] = "Momentum Breakout"
+                else:
+                    if item['pe'] > 50: item['reason'] = "Overvalued Correction"
+                    elif item['pe'] > 0 and item['pe'] < 10: item['reason'] = "Panic Selling (Cheap)"
+                    else: item['reason'] = "Profit Taking"
+                    
+            except Exception:
+                item['pe'] = 0
+                item['roe'] = 0
+                item['reason'] = "N/A"
         
         return gainers, losers
         
