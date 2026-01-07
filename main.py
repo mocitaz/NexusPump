@@ -215,10 +215,16 @@ def get_common_keyboard(ticker):
 
 # --- Command Handlers ---
 
+# V61: Simple Subscriber Memory (Reset on Restart)
+SUBSCRIBERS = set()
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user.first_name
+    chat_id = update.effective_chat.id
+    SUBSCRIBERS.add(chat_id) # Register user for morning briefing
+    
     help_text = (
-        "👋 *Halo, Boss {user}!*\n"
+        f"👋 *Halo, Boss {user}!*\n"
         "👑 *NEXUS GOD MODE: ENABLED* ⚡\n"
         "━━━━━━━━━━━━━━━━━━━━━━\n"
         "Saya bukan sekadar bot. Saya adalah *Investment Intelligence System* tercanggih untuk Anda.\n"
@@ -231,7 +237,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• `/picks`    : Top 5 Saham Pilihan Besok (Prime Watchlist).\n"
         "• `/bsjp`     : Sinyal Beli Sore Jual Pagi (Scalping Mode).\n"
         "• `/bpjs`     : Sinyal Beli Pagi Jual Sore (Day Trade).\n"
-        "• `/break`    : Menu Jajan Siang (Session 2 Picks).\n\n"
+        "• `/break`    : Menu Jajan Siang (Session 2 Picks).\n"
+        "• `/briefing` : 🌞 Manual Trigger Morning Briefing (Test).\n\n"
         "💼 *PORTFOLIO MANAGER* 🆕\n"
         "• `/buy`      : Catat Pembelian (`/buy BBCA 9000 10`).\n"
         "• `/sell`     : Catat Penjualan.\n"
@@ -1199,6 +1206,91 @@ async def market_alert_job(context: ContextTypes.DEFAULT_TYPE):
 
 # ... Session reporters ...
 # ... Session reporters ...
+# --- V61: MORNING BRIEFING LOGIC ---
+async def generate_briefing():
+    """Generates the morning briefing content."""
+    try:
+        # 1. IHSG Outlook
+        ihsg_df = await asyncio.to_thread(yf.download, "^JKSE", period="5d", progress=False)
+        ihsg_outlook = "Neutral"
+        ihsg_chg = 0
+        ihsg_last = 0
+        
+        if not ihsg_df.empty:
+            # Handle MultiIndex columns if present (Price, Ticker) -> just select Price
+            # Assuming standard structure or adjusting
+            if isinstance(ihsg_df.columns, pd.MultiIndex):
+                 ihsg_close = ihsg_df['Close'].iloc[:, 0]
+            else:
+                 ihsg_close = ihsg_df['Close']
+            
+            ihsg_last = ihsg_close.iloc[-1]
+            ihsg_prev = ihsg_close.iloc[-2]
+            ihsg_chg = ((ihsg_last - ihsg_prev) / ihsg_prev) * 100
+            
+            ma5 = ihsg_close.rolling(5).mean().iloc[-1]
+            if ihsg_last > ma5: ihsg_outlook = "Bullish 🐂 (Above MA5)"
+            else: ihsg_outlook = "Bearish 🐻 (Below MA5)"
+        
+        # 2. Top Picks (Reusing V60 Logic)
+        top_picks = await asyncio.to_thread(scan_top_picks, IDX_WATCHLIST)
+        picks_txt = ""
+        if top_picks:
+            for i, p in enumerate(top_picks[:3]): # Top 3 only
+                q_score = p.get('quality_score', 0)
+                star = "⭐" if q_score > 15 else ""
+                picks_txt += f"{i+1}. *{p['ticker']}* ({p['score']}) {star}\n   👉 Target: Algo Trend\n"
+        else:
+            picks_txt = "⚠️ Market Wait & See."
+
+        date_str = datetime.datetime.now(pytz.timezone('Asia/Jakarta')).strftime('%d %b %Y')
+        
+        msg = (
+            f"🌞 *MORNING BRIEFING* | {date_str}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"🇮🇩 *IHSG OUTLOOK*\n"
+            f"• Level: {ihsg_last:,.0f} ({ihsg_chg:+.2f}%)\n"
+            f"• Trend: {ihsg_outlook}\n\n"
+            f"🚀 *TOP 3 PICKS TODAY*\n"
+            f"{picks_txt}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🏆 *Have a profitable day, Boss!*"
+        )
+        return msg
+    except Exception as e:
+        logger.error(f"Briefing Gen Error: {e}")
+        return None
+
+async def briefing(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Manual trigger for Morning Briefing."""
+    target_msg = update.message
+    waiting = await target_msg.reply_text("☕ *Brewing Morning Briefing...*", parse_mode='Markdown')
+    
+    msg = await generate_briefing()
+    
+    if msg:
+        await waiting.edit_text(msg, parse_mode='Markdown')
+    else:
+        await waiting.edit_text("❌ Gagal membuat briefing pagi ini.", parse_mode='Markdown')
+
+async def auto_morning_briefing(context: ContextTypes.DEFAULT_TYPE):
+    """Scheduled job to send briefing to subscribers."""
+    msg = await generate_briefing()
+    if not msg: return
+    
+    # Broadcast to all known subscribers
+    count = 0
+    for chat_id in SUBSCRIBERS:
+        try:
+            await context.bot.send_message(chat_id=chat_id, text=msg, parse_mode='Markdown')
+            count += 1
+        except Exception:
+            pass # Handle blocked bot users
+            
+    logger.info(f"Morning Briefing sent to {count} users.")
+
+# --- End V61 Logic ---
+
 async def session_open(context: ContextTypes.DEFAULT_TYPE):
     reporter = MarketSessionReporter(context.application, channel_id=CHANNEL_ID)
     await reporter.send_report(context, 'open')
@@ -1296,6 +1388,7 @@ if __name__ == '__main__':
     application.add_handler(CommandHandler('break', break_session))
     application.add_handler(CommandHandler('ping', ping))
     application.add_handler(CommandHandler('predict_open', predict_open))  # V59
+    application.add_handler(CommandHandler('briefing', briefing))      # V61
     
     # Portfolio Handlers
     application.add_handler(CommandHandler('buy', buy))
@@ -1317,6 +1410,10 @@ if __name__ == '__main__':
     
     tz_jkt = pytz.timezone('Asia/Jakarta')
     weekdays = (0, 1, 2, 3, 4)
+    
+    # V61: Morning Briefing at 08:30
+    job_queue.run_daily(auto_morning_briefing, time=datetime.time(hour=8, minute=30, tzinfo=tz_jkt), days=weekdays)
+    
     job_queue.run_daily(session_open, time=datetime.time(hour=9, minute=0, tzinfo=tz_jkt), days=weekdays)
     job_queue.run_daily(session_mid, time=datetime.time(hour=12, minute=0, tzinfo=tz_jkt), days=weekdays)
     job_queue.run_daily(session_open2, time=datetime.time(hour=13, minute=30, tzinfo=tz_jkt), days=weekdays)
