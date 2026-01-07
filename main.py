@@ -1233,7 +1233,7 @@ async def generate_briefing():
                         ihsg_close = ihsg_df.iloc[:, 0] # Risky but often 'Close' or 'Adj Close' is first? No.
                         # Safe fallback: Search for any column named 'Close'
                         # For now, let's just skip complex handling and use basic iloc if simple access fails
-                         pass
+                        pass
                 else:
                     ihsg_close = ihsg_df['Close']
 
