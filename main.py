@@ -1065,7 +1065,8 @@ if __name__ == '__main__':
     application.add_handler(CommandHandler('sectors', sectors))
     application.add_handler(CommandHandler('rekomendasi', picks))
     
-    application.add_handler(CommandHandler('fibo', fibo)) # NEW
+    application.add_handler(CommandHandler('fibo', fibo)) 
+    application.add_handler(CommandHandler('xray', xray)) # FIX: Register XRAY Handler
     
     # Portfolio Handlers
     application.add_handler(CommandHandler('buy', buy))
