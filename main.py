@@ -1215,6 +1215,12 @@ if __name__ == '__main__':
     # Webhook networking issues detected on Railway. 
     # Since Local Bot is confirmed DEAD, Cloud Polling is SAFE and MORE STABLE for now.
     print("☁️ CLOUD POLLING MODE ENABLED")
+    # V52 Stability: Force Delete Webhook to ensure Polling works immediately
+    # This fixes "Silent Bot" issues where Telegram still tries to push to old URL.
+    print("🧹 Cleaning up old webhooks...")
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(application.bot.delete_webhook(drop_pending_updates=True))
+    
     application.run_polling()
     
     # Legacy Webhook Code (Disabled for Stability)
