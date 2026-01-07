@@ -227,7 +227,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• `/screener` : Scanner Saham Potensial (Top Picks).\n"
         "• `/sectors`  : Peta Rotasi Sektor (Flow of Funds).\n"
         "• `/picks`    : Top 5 Saham Pilihan Besok (Prime Watchlist).\n"
-        "• `/bsjp`     : Sinyal Beli Sore Jual Pagi (Scalping Mode).\n\n"
+        "• `/bsjp`     : Sinyal Beli Sore Jual Pagi (Scalping Mode).\n"
+        "• `/bpjs`     : Sinyal Beli Pagi Jual Sore (Day Trade).\n"
+        "• `/break`    : Menu Jajan Siang (Session 2 Picks).\n\n"
         "💼 *PORTFOLIO MANAGER* 🆕\n"
         "• `/buy`      : Catat Pembelian (`/buy BBCA 9000 10`).\n"
         "• `/sell`     : Catat Penjualan.\n"
@@ -1138,7 +1140,6 @@ async def post_init(application):
         BotCommand("harga", "Cek Harga & Fundamental"),
         BotCommand("chart", "Lihat Chart Teknikal"),
         BotCommand("analisa", "Analisis AI Lengkap"),
-        BotCommand("predict", "Proyeksi Harga Masa Depan"),
         BotCommand("predict", "Proyeksi Harga Masa Depan"),
         BotCommand("fibo", "Auto-Fibonacci Golden Ratio"),
         BotCommand("xray", "Nexus X-Ray Infographic"),
