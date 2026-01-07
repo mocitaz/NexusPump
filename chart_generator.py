@@ -99,62 +99,60 @@ def generate_chart(ticker, period="1mo", sup_res_levels=None, fibo_levels=None):
                 'text.color': '#e0e0e0', 'axes.labelcolor': '#e0e0e0', 'xtick.color': '#808080', 'ytick.color': '#808080'}
         )
         
-        # 6. Prepare Plot Arguments
+        
+        # 6. Prepare Plot Arguments (Compact Style)
         buf = io.BytesIO()
         
-        title_text = f"\n{ticker} - {period.upper()} (NEXUS AI)"
-        if fibo_levels: title_text += " [FIBO MODE]"
+        # Override Title handling manually for better layout
+        # title=dict(title=title_text, color='#ffffff', fontsize=14),
         
         plot_kwargs = dict(
             type='candle',
             volume=True,
             addplot=addplots,
-            title=dict(title=title_text, color='#ffffff', fontsize=14),
             style=s,
-            panel_ratios=(4, 1, 1, 1), 
+            panel_ratios=(5, 2, 2, 2), # More space for Price
             datetime_format='%d-%b',
             tight_layout=True,
-            scale_width_adjustment=dict(volume=0.7, candle=1.2),
-            returnfig=True # Enable Figure manipulation
+            scale_width_adjustment=dict(volume=0.7, candle=1.4),
+            returnfig=True,
+            title='' # Disable default title
         )
         
-        # Combine S/R and Fibo Lines
+        # Combine S/R and Fibo Lines (Same Logic)
         combined_hlines = []
         combined_colors = []
         
         if sup_res_levels:
             combined_hlines.extend(sup_res_levels)
-            combined_colors.extend(['#ffffff'] * len(sup_res_levels)) # White for SR
+            combined_colors.extend(['#ffffff'] * len(sup_res_levels))
             
         if fibo_levels:
             for label, price in fibo_levels.items():
                 combined_hlines.append(price)
-                if "0.618" in label: color = '#ffd700' # GOLD
-                elif "0.500" in label: color = '#ffffff' # White
-                elif "0.382" in label: color = '#00f2ff' # Cyan
-                elif "0.236" in label: color = '#ff0055' # Red/Pink
-                elif "0.786" in label: color = '#00ff44' # Green
-                else: color = '#808080' # Grey
+                if "0.618" in label: color = '#ffd700'
+                elif "0.500" in label: color = '#ffffff'
+                elif "0.382" in label: color = '#00f2ff'
+                elif "0.236" in label: color = '#ff0055'
+                elif "0.786" in label: color = '#00ff44'
+                else: color = '#808080'
                 combined_colors.append(color)
         
         if combined_hlines:
-             hlines_dict = dict(
-                hlines=combined_hlines, 
-                colors=combined_colors, 
-                linestyle='-.', 
-                linewidths=0.8,
-                alpha=0.7
-            )
-             plot_kwargs['hlines'] = hlines_dict
+             plot_kwargs['hlines'] = dict(hlines=combined_hlines, colors=combined_colors, linestyle='-.', linewidths=0.6, alpha=0.5)
 
         # Plot and Get Figure
         fig, axlist = mpf.plot(df_plot, **plot_kwargs)
+        
+        # --- Custom Premium Header ---
+        fig.text(0.05, 0.94, ticker, color='white', fontsize=28, fontweight='bold', ha='left')
+        fig.text(0.05, 0.90, f"{period.upper()} CHART - NEXUS INTELLIGENCE", color='#00f2ff', fontsize=10, fontweight='bold', ha='left')
         
         # Add Logo
         add_logo(fig, 'top-right')
         
         # Save Manually
-        fig.savefig(buf, dpi=120, bbox_inches='tight', facecolor='#0a0a0a')
+        fig.savefig(buf, dpi=100, bbox_inches='tight', facecolor='#0a0a0a', pad_inches=0.2)
         buf.seek(0)
         return buf
         
@@ -382,6 +380,7 @@ def generate_portfolio_pie(holdings, total_value, cash_balance=0):
     """
     try:
         import matplotlib.pyplot as plt
+        import matplotlib.patches as patches
         
         # Prepare Data
         labels = []
@@ -419,22 +418,47 @@ def generate_portfolio_pie(holdings, total_value, cash_balance=0):
             textprops=dict(color="w")
         )
         
+        # Plot
+        fig, ax = plt.subplots(figsize=(6, 7), facecolor='#0a0a0a') # Taller for header
+        
+        # Draw Card Container
+        rect = patches.FancyBboxPatch((0.02, 0.02), 0.96, 0.96, boxstyle="round,pad=0.01,rounding_size=0.05", 
+                                      fc='#111111', ec='#222222', lw=2, transform=fig.transFigure, zorder=-1)
+        fig.add_artist(rect)
+        
+        wedges, texts, autotexts = ax.pie(
+            sizes, 
+            labels=labels, 
+            autopct='%1.1f%%', 
+            startangle=90, 
+            colors=colors,
+            pctdistance=0.80,
+            labeldistance=1.1,
+            textprops=dict(color="w")
+        )
+        
         # Donut Style
-        centre_circle = plt.Circle((0,0),0.70,fc='#0a0a0a')
+        centre_circle = plt.Circle((0,0),0.65,fc='#111111')
         fig.gca().add_artist(centre_circle)
         
-        # Styling
-        plt.setp(texts, size=10, weight="bold")
-        plt.setp(autotexts, size=9, weight="bold", color="#000000")
+        # Center Text (Total Value)
+        ax.text(0, 0.1, "TOTAL VALUE", color='#888888', fontsize=8, ha='center')
+        ax.text(0, -0.1, f"{total_value/1_000_000:.1f}M", color='white', fontsize=18, fontweight='bold', ha='center')
         
-        # Title
-        ax.set_title(f"PORTFOLIO ALLOCATION\nRp {total_value:,.0f}", color='white', pad=20, fontsize=12, fontweight='bold')
+        # Styling
+        plt.setp(texts, size=9)
+        plt.setp(autotexts, size=8, weight="bold", color="#000000")
+        
+        # Custom Header
+        ax.set_title("") # Disable default
+        fig.text(0.5, 0.92, "PORTFOLIO ALLOCATION", color='white', fontsize=16, fontweight='bold', ha='center')
+        fig.text(0.5, 0.88, "NEXUS WEALTH TRACKER", color='#00f2ff', fontsize=10, ha='center')
         
         # Add Logo
         add_logo(fig, 'top-left')
         
         buf = io.BytesIO()
-        plt.savefig(buf, format='png', facecolor='#0a0a0a', bbox_inches='tight', dpi=100)
+        plt.savefig(buf, format='png', facecolor='#0a0a0a', bbox_inches='tight', dpi=100, pad_inches=0.1)
         plt.close(fig)
         buf.seek(0)
         return buf
@@ -463,59 +487,60 @@ def generate_prediction_card(data):
         rsi = data['rsi']
         slope = data['slope']
         
-        # Setup Figure
-        fig = plt.figure(figsize=(10, 12), facecolor='#050505')
-        ax = fig.add_axes([0, 0, 1, 1]) # Full bleed
+        # Setup Figure (Compact Card)
+        fig = plt.figure(figsize=(8, 10), facecolor='#050505') # Slightly smaller width for compactness
+        ax = fig.add_axes([0, 0, 1, 1]) 
         ax.set_facecolor('#050505')
         ax.axis('off')
         
         # Helper: Draw Card BG
         def draw_box(x, y, w, h, color='#0a0a0a', alpha=1.0):
-            rect = patches.FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.02,rounding_size=0.05", 
+            rect = patches.FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.0,rounding_size=0.04", 
                                           fc=color, ec='#1a1a1a', lw=1, alpha=alpha)
             ax.add_patch(rect)
             
-        # 1. Header
-        draw_box(0.05, 0.82, 0.9, 0.15, color='#0a0a0a')
-        ax.text(0.5, 0.93, f"FUTURE SIGHT: {ticker}", color='white', fontsize=32, fontweight='bold', ha='center', va='center')
-        ax.text(0.5, 0.86, "AI PROJECTION ENGINE", color='#00f2ff', fontsize=12, fontweight='bold', ha='center', va='center')
+        # 1. Header (Compact)
+        draw_box(0.04, 0.85, 0.92, 0.12, color='#080808')
+        ax.text(0.5, 0.93, f"{ticker}", color='white', fontsize=36, fontweight='bold', ha='center', va='center')
+        ax.text(0.5, 0.88, "AI FUTURE PROJECTION", color='#00f2ff', fontsize=10, fontweight='bold', ha='center', va='center')
         
-        # 2. Target Price (Big Center)
+        # 2. Target Price (Compact Box)
         color_target = "#00ff44" if change_pct > 0 else "#ff0055"
-        draw_box(0.05, 0.55, 0.9, 0.25, color='#080808')
+        draw_box(0.04, 0.62, 0.92, 0.20, color='#0a0a0a')
         
-        ax.text(0.5, 0.75, "TARGET PRICE (7 DAYS)", color='#555555', fontsize=12, ha='center')
-        ax.text(0.5, 0.67, f"Rp {target:,.0f}", color='white', fontsize=48, fontweight='bold', ha='center')
+        ax.text(0.5, 0.76, "TARGET PRICE (7D)", color='#555555', fontsize=10, ha='center')
+        ax.text(0.5, 0.69, f"Rp {target:,.0f}", color='white', fontsize=42, fontweight='bold', ha='center')
         
-        # Change Pill
-        bbox_props = dict(boxstyle="round,pad=0.3", fc=color_target, ec="none", alpha=0.9)
-        ax.text(0.5, 0.59, f"{change_pct:+.2f}%", color='black', fontsize=16, fontweight='bold', ha='center', bbox=bbox_props)
+        # Change Pill (Smaller)
+        bbox_props = dict(boxstyle="round,pad=0.2", fc=color_target, ec="none", alpha=0.9)
+        ax.text(0.5, 0.48, f"{change_pct:+.2f}%", color='black', fontsize=14, fontweight='bold', ha='center', bbox=bbox_props, transform=ax.transAxes) # Floating between boxes
         
-        # 3. Confidence & Logic
-        draw_box(0.05, 0.15, 0.9, 0.38, color='#0a0a0a')
+        # 3. Confidence & Logic (Grid)
+        draw_box(0.04, 0.18, 0.92, 0.35, color='#080808')
         
-        # Logic Rows
-        ax.text(0.1, 0.48, "CONFIDENCE LEVEL", color='#888888', fontsize=10)
-        # Visual Bar for Confidence
-        # Draw empty bar
-        rect_bg = patches.Rectangle((0.1, 0.44), 0.8, 0.02, fc='#222222')
+        # Logic Rows (Tight Spacing)
+        y_start = 0.46
+        y_step = 0.07
+        
+        def draw_row(label, val, y_pos, col='white'):
+            ax.text(0.1, y_pos, label, color='#666666', fontsize=9)
+            ax.text(0.9, y_pos, val, color=col, fontsize=11, fontweight='bold', ha='right')
+
+        # Confidence Bar
+        ax.text(0.1, y_start, "CONFIDENCE", color='#666666', fontsize=9)
+        rect_bg = patches.Rectangle((0.4, y_start-0.01), 0.5, 0.015, fc='#222222')
         ax.add_patch(rect_bg)
-        # Draw fill bar
-        rect_fill = patches.Rectangle((0.1, 0.44), 0.8 * (confidence/100), 0.02, fc='#00f2ff')
+        rect_fill = patches.Rectangle((0.4, y_start-0.01), 0.5 * (confidence/100), 0.015, fc='#00f2ff')
         ax.add_patch(rect_fill)
-        ax.text(0.9, 0.48, f"{confidence}%", color='#00f2ff', fontsize=12, fontweight='bold', ha='right')
+        ax.text(0.92, y_start, f"{confidence}%", color='#00f2ff', fontsize=10, fontweight='bold', ha='left')
         
-        ax.text(0.1, 0.38, "PRIMARY BIAS", color='#888888', fontsize=10)
-        ax.text(0.9, 0.38, bias, color='white', fontsize=12, fontweight='bold', ha='right')
-        
-        ax.text(0.1, 0.30, "KEY DRIVER", color='#888888', fontsize=10)
-        ax.text(0.9, 0.30, reason, color='white', fontsize=12, fontweight='bold', ha='right')
-        
-        ax.text(0.1, 0.22, "MOMENTUM (RSI)", color='#888888', fontsize=10)
-        ax.text(0.9, 0.22, f"{rsi:.1f}", color='white', fontsize=12, fontweight='bold', ha='right')
+        draw_row("BIAS", bias, y_start - y_step)
+        draw_row("DRIVER", reason[:25] + "..." if len(reason)>25 else reason, y_start - y_step*2)
+        draw_row("RSI", f"{rsi:.1f}", y_start - y_step*3)
+        draw_row("SLOPE", f"{slope:.2f}", y_start - y_step*4)
         
         # 4. Footer
-        ax.text(0.5, 0.08, "GENERATED BY NEXUS PREDICTIVE AI", color='#333333', fontsize=8, ha='center')
+        ax.text(0.5, 0.08, "GENERATED BY NEXUS PREDICTIVE AI", color='#333333', fontsize=7, ha='center')
         
         # Logo
         add_logo(fig, 'top-right')
