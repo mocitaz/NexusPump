@@ -14,7 +14,7 @@ IDX_WATCHLIST = [
     
     # Energy & Mining (Coal, Gold, Nickel)
     "ADRO", "PTBA", "ITMG", "HRUM", "INDY", "BUMI", "ADMR",
-    "ANTM", "INCO", "MDKA", "MBMA", "TINS", "PSAB", "NCKL", "ARCHI",
+    "ANTM", "INCO", "MDKA", "MBMA", "TINS", "PSAB", "NCKL",
     
     # Oil & Gas / Petro
     "AKRA", "MEDC", "PGAS", "BRPT", "TPIA", "ESSA",

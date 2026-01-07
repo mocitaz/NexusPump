@@ -118,10 +118,10 @@ def get_batch_historical_data(tickers, period="1mo", interval="1d"):
         if not sa_tickers: return {}
 
         # 2. Bulk Download
-        # threads=False to prevent crashing on some VPS
+        # threads=True uses multi-threading (Re-enabled V41 as unthreaded is 4x slower)
         # group_by='ticker' makes it easier to iterate: data['BBCA.JK'] -> DF
         logger.info(f"Batch downloading {len(sa_tickers)} stocks...")
-        data = yf.download(sa_tickers, period=period, interval=interval, group_by='ticker', threads=False, progress=False)
+        data = yf.download(sa_tickers, period=period, interval=interval, group_by='ticker', threads=True, progress=False)
         
         result = {}
         for t_orig, t_sa in zip(tickers, sa_tickers):
