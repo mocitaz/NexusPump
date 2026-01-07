@@ -14,6 +14,7 @@ from market_pulse import calculate_market_mood, generate_gauge_chart
 from idx_tickers import IDX_WATCHLIST
 from alerts import StockMonitor, MarketSessionReporter
 from portfolio_manager import PortfolioManager
+from predictor import predict_opening_price  # V59
 
 # ...
 
@@ -1028,6 +1029,66 @@ async def break_session(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Break Scan Error: {e}")
         await msg.edit_text(f"❌ *Error scanning menu*: {e}")
 
+async def predict_open(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    V59: OPENING PRICE PREDICTION (ML-based)
+    Predicts next session's opening price using ML model.
+    """
+    args = context.args if hasattr(context, 'args') and context.args else []
+    
+    if not args:
+        await update.message.reply_text("🔮 Gunakan format: `/predict_open <kode saham>`", parse_mode='Markdown')
+        return
+    
+    ticker = args[0].upper()
+    waiting = await update.message.reply_text(f"🔮 *NEXUS OPENING PREDICTOR*\n_Analyzing {ticker} historical patterns..._", parse_mode='Markdown')
+    
+    try:
+        # Run prediction (async to avoid blocking)
+        result = await asyncio.wait_for(
+            asyncio.to_thread(predict_opening_price, ticker, period="6mo"),
+            timeout=60.0
+        )
+        
+        if not result:
+            await waiting.edit_text(f"❌ *Prediction Failed*\nData tidak cukup untuk {ticker}.", parse_mode='Markdown')
+            return
+        
+        # Extract results
+        predicted_open = result['predicted_open']
+        last_close = result['last_close']
+        gap_pct = result['gap_pct']
+        confidence = result['confidence']
+        reasoning = result['reasoning']
+        
+        # Determine gap direction
+        gap_icon = "🟢" if gap_pct > 0 else "🔴" if gap_pct < 0 else "⚪"
+        gap_label = "GAP UP" if gap_pct > 0 else "GAP DOWN" if gap_pct < 0 else "FLAT"
+        
+        # Format message
+        time_str = datetime.datetime.now(pytz.timezone('Asia/Jakarta')).strftime('%H:%M')
+        msg = (
+            f"🔮 *NEXUS OPENING PRICE PREDICTION* 🔮\n"
+            f"🏢 *{ticker}* | ⏰ {time_str} WIB\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"📊 *PREDIKSI OPEN SESI 1 (BESOK)*\n"
+            f"💵 Predicted Open: *Rp {predicted_open:,.0f}*\n"
+            f"{gap_icon} Gap: *{gap_pct:+.2f}%* ({gap_label})\n\n"
+            f"📈 Last Close: Rp {last_close:,.0f}\n"
+            f"🎯 Confidence: *{confidence:.0f}%*\n\n"
+            f"🧠 *AI REASONING*:\n_{reasoning}_\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"⚠️ _Prediksi ML berdasarkan 6 bulan historical pattern. Bukan jaminan akurat 100%._"
+        )
+        
+        await waiting.edit_text(msg, parse_mode='Markdown')
+        
+    except asyncio.TimeoutError:
+        await waiting.edit_text("⚠️ *Timeout*. Prediksi terlalu lama. Coba lagi.", parse_mode='Markdown')
+    except Exception as e:
+        logger.error(f"Predict Open Error: {e}")
+        await waiting.edit_text(f"❌ *ERROR*: {e}", parse_mode='Markdown')
+
 async def ping(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """V42: Health Check"""
     latency = "⚡"
@@ -1138,7 +1199,8 @@ async def channel_command_dispatcher(update: Update, context: ContextTypes.DEFAU
         'picks': picks, 'rekomendasi': picks, 'sectors': sectors,
         'buy': buy, 'sell': sell, 'porto': porto, 'portfolio': porto,
         'fibo': fibo, 'xray': xray,
-        'bpjs': bpjs, 'break': break_session, 'ping': ping
+        'bpjs': bpjs, 'break': break_session, 'ping': ping,
+        'predict_open': predict_open  # V59
     }
     if command in cmd_map:
         await cmd_map[command](update, context)
@@ -1170,6 +1232,7 @@ async def post_init(application):
         BotCommand("porto", "Cek Portofolio"),
         BotCommand("buy", "Catat Pembelian"),
         BotCommand("sell", "Catat Penjualan"),
+        BotCommand("predict_open", "Prediksi Harga Pembukaan"),  # V59
     ]
     await application.bot.set_my_commands(commands)
     logger.info("Bot commands set successfully.")
@@ -1204,6 +1267,7 @@ if __name__ == '__main__':
     application.add_handler(CommandHandler('bpjs', bpjs))
     application.add_handler(CommandHandler('break', break_session))
     application.add_handler(CommandHandler('ping', ping))
+    application.add_handler(CommandHandler('predict_open', predict_open))  # V59
     
     # Portfolio Handlers
     application.add_handler(CommandHandler('buy', buy))
