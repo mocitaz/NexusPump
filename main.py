@@ -944,6 +944,10 @@ async def bpjs(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except asyncio.TimeoutError:
          await waiting.edit_text("⚠️ *Timeout*. Scan Day Trade terlalu berat. Coba lagi saat market sepi.")
          return
+    except Exception as e:
+         await waiting.edit_text(f"❌ *ERROR*: {e}")
+         logger.error(f"BPJS Error: {e}")
+         return
          
     time_str = datetime.datetime.now(pytz.timezone('Asia/Jakarta')).strftime('%H:%M')
     
