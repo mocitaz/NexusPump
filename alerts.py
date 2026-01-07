@@ -70,8 +70,8 @@ class StockMonitor:
                 price = data['price']
                 volume = data['volume']
                 
-                # Check 1: Significant Gain (>3%)
-                if change_pct >= 3.0:
+                # Check 1: Significant Gain (>3%) or High Vol Spike (>2%)
+                if change_pct >= 2.0:
                     
                     # Quick RSI check
                     try:
@@ -93,11 +93,15 @@ class StockMonitor:
                     
                     if change_pct > 5.0:
                         is_alert = True
-                        reason = "🚀 PUMP ALERT (>5%)"
+                        reason = "🚀 PUMP ALERT (Major Move >5%)"
                     elif change_pct > 3.0 and rsi < 70:
                         is_alert = True
                         reason = f"⚡ PERGERAKAN SIGNIFIKAN (>3%, RSI {rsi:.1f})"
-                    elif volume > 500000000 and change_pct > 2.0:
+                    elif volume > 100_000_000 and change_pct > 2.0:
+                        # V57: Instant Surge Trigger (Lower threshold but High Volume)
+                        is_alert = True
+                        reason = "🌊 INSTANT SURGE (>2% + High Vol)"
+                    elif volume > 500_000_000:
                          is_alert = True
                          reason = "🔊 VOLUME SPIKE (Big Money Flow)"
 

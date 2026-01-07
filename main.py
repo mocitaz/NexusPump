@@ -1208,7 +1208,8 @@ if __name__ == '__main__':
     
     # Jobs
     job_queue = application.job_queue
-    job_queue.run_repeating(market_alert_job, interval=300, first=10)
+    # V57: Reduce interval to 60s for "Real-Time" feel
+    job_queue.run_repeating(market_alert_job, interval=60, first=10)
     
     tz_jkt = pytz.timezone('Asia/Jakarta')
     weekdays = (0, 1, 2, 3, 4)
