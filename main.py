@@ -516,18 +516,22 @@ async def flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
         vol = r['vol_ratio']
         chg = r['change']
         
+        # V60: Market Cap Context
+        whale_class = r.get('whale_class', 'Unknown')
+        mcap_t = r.get('mcap', 0) / 1_000_000_000_000
+        
         # Icon logic
         icon = "🤫" if "SILENT" in sig else "🐳"
         
         msg += (
             f"{icon} *{ticker}* ({chg:+.1f}%)\n"
-            f"   📊 Volume: {vol:.1f}x Avg\n"
-            f"   🚨 *{sig}*\n"
-            f"   _{r['desc']}_\n\n"
+            f"   {whale_class} (Cap: {mcap_t:.1f}T)\n"
+            f"   🔊 Volume: *{vol:.1f}x* Avg\n"
+            f"   🚨 *{sig}* | _{r['desc']}_\n\n"
         )
         count += 1
         
-    msg += "━━━━━━━━━━━━━━━━━━━━━━\n💡 _Radar mendeteksi anomali volume dan aktivitas Smart Money._"
+    msg += "━━━━━━━━━━━━━━━━━━━━━━\n💡 _Radar mendeteksi anomali volume dan aktivitas Smart Money (Min Cap 5T)._"
     await waiting.edit_text(msg, parse_mode='Markdown')
 
 async def sectors(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1119,13 +1123,19 @@ async def picks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = f"🔭 *NEXUS PRIME PICKS (TOMORROW)*\n⏰ Pukul: {time_str} WIB\n━━━━━━━━━━━━━━━━━━━━━━\n"
     
     for c in candidates[:5]:
+        # V60: Fundamental metrics
+        pe = c.get('pe', 0)
+        roe = c.get('roe', 0)
+        quality = c.get('quality_score', 0)
+        
         msg += (
             f"💎 *{c['ticker']}* @ {c['price']:,.0f}\n"
-            f"   📈 Potensi: {c['reasons']}\n"
-            f"   📊 Score: {c['score']} | Vol: {c['vol_ratio']:.1f}x Avg\n\n"
+            f"   📈 Score: *{c['score']}* | {c['reasons']}\n"
+            f"   🔊 Vol Ratio: {c['vol_ratio']:.1f}x Avg\n"
+            f"   📊 Fund: PE {pe:.1f} | ROE {roe:.1f}% | Q-Score: {quality}\n\n"
         )
     
-    msg += "━━━━━━━━━━━━━━━━━━━━━━\n💡 _Top 5 Saham Uptrend + Akumulasi untuk dipantau besok._"
+    msg += "━━━━━━━━━━━━━━━━━━━━━━\n💡 _Top 5 Saham Uptrend + Akumulasi + Fundamental Kuat._"
     await waiting.edit_text(msg, parse_mode='Markdown')
 
 # --- Background Tasks ---

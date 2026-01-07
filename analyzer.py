@@ -404,9 +404,9 @@ def predict_future_price(ticker, days=7):
 def scan_whale_flow(watchlist):
     """
     V21 NEXUS FLOW (Performance Optimized)
-    Criteria: Silent Accumulation or Golden Flow.
+    V60: Added market cap context for whale classification.
     """
-    from data_fetcher import get_batch_historical_data
+    from data_fetcher import get_batch_historical_data, get_stock_fundamentals
     results = []
     
     # 1. Batch Fetch
@@ -444,12 +444,28 @@ def scan_whale_flow(watchlist):
                 desc = "Price Breakout + Volume Explosion."
                 
             if signal:
+                # V60: Fetch Market Cap for Whale Classification
+                fundamentals = get_stock_fundamentals(ticker)
+                mcap = fundamentals.get('market_cap', 0) if fundamentals else 0
+                
+                # Only show if real whale (Large Cap > 5T for context, usually >10T for true whale)
+                if mcap < 5_000_000_000_000:
+                    continue  # Skip small caps (not real whale movement)
+                
+                # Whale classification
+                if mcap > 50_000_000_000_000:
+                    whale_class = "MEGA CAP WHALE 🐋"
+                else:
+                    whale_class = "LARGE CAP WHALE 🐳"
+                    
                 results.append({
                     "ticker": ticker,
                     "signal": signal,
                     "vol_ratio": vol_ratio,
                     "change": price_change,
-                    "desc": desc
+                    "desc": desc,
+                    "whale_class": whale_class,
+                    "mcap": mcap
                 })
                 
         except Exception:
@@ -462,10 +478,9 @@ def scan_whale_flow(watchlist):
 def scan_top_picks(watchlist):
     """
     V24 NEXUS WATCHLIST: TOP PICKS FOR TOMORROW
-    Uses Batch Data Fetch (Performance Optimized)
-    Criteria: Strong Uptrend, Healthy RSI, Accumulation Volume.
+    V60: Added fundamental scoring for quality picks.
     """
-    from data_fetcher import get_batch_historical_data
+    from data_fetcher import get_batch_historical_data, get_stock_fundamentals
     candidates = []
     
     # Batch Fetch Data (Much Faster)
@@ -490,13 +505,13 @@ def scan_top_picks(watchlist):
             # 1. Uptrend: Close > MA20 & MA20 > MA50 (Golden Alignment)
             if not (last['Close'] > ma20 and ma20 > ma50): continue
             
-            # 2. RSI Healthy (45-75) - Not Oversold, Not Extreme Overbought (Relaxed slightly)
+            # 2. RSI Healthy (45-78) - Not Oversold, Not Extreme Overbought
             if not (45 <= rsi <= 78): continue
             
             # 3. Volume Check (Liquid & Active)
-            if vol_ratio < 0.6: continue # Relaxed to 0.6 to catch more
+            if vol_ratio < 0.6: continue 
             
-            # SCORING
+            # TECHNICAL SCORING
             score = 0
             reasons = []
             
@@ -512,15 +527,42 @@ def scan_top_picks(watchlist):
             else:
                  change_pct = ((last['Close'] - df.iloc[-2]['Close']) / df.iloc[-2]['Close']) * 100
                  
-            if change_pct > 20: continue # Too risky already pumped
+            if change_pct > 20: continue 
+            
+            # V60: FUNDAMENTAL SCORING (Fetch only for filtered candidates)
+            fundamentals = get_stock_fundamentals(ticker)
+            quality_score = 0
+            pe = fundamentals.get('pe_ratio', 0) if fundamentals else 0
+            roe = fundamentals.get('roe', 0) if fundamentals else 0
+            mcap = fundamentals.get('market_cap', 0) if fundamentals else 0
+            
+            # Global Filter: Exclude very bad fundamentals
+            if pe > 50 or (roe and roe < 0) or mcap < 1_000_000_000_000:
+                continue
+            
+            # Quality scoring
+            if pe > 0 and pe < 20:
+                quality_score += 10
+                reasons.append(f"PE Undervalued ({pe:.1f})")
+            if roe and roe > 0.15:
+                quality_score += 10
+                reasons.append(f"ROE Kuat ({roe*100:.1f}%)")
+            if mcap > 10_000_000_000_000:
+                quality_score += 5
+                reasons.append("Large Cap")
+            
+            total_score = score + quality_score
             
             candidates.append({
                 "ticker": ticker,
                 "price": last['Close'],
                 "change": change_pct,
-                "score": score,
+                "score": total_score,
                 "reasons": ", ".join(reasons) if reasons else "Trend Follow",
-                "vol_ratio": vol_ratio
+                "vol_ratio": vol_ratio,
+                "pe": pe,
+                "roe": roe * 100 if roe else 0,
+                "quality_score": quality_score
             })
             
         except Exception: continue
