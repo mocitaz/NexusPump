@@ -235,12 +235,12 @@ def scan_bpjs_strategy(watchlist):
            # But since we scan likely during the day, we check current price too
            current_chg = ((last['Close'] - prev['Close']) / prev['Close']) * 100
            
-           # Criteria: Positive Momentum (> 0.5%) and Active Volume
-           if current_chg > 0.5:
+           # Criteria: Positive Momentum (> 0.2%) - Relaxed from 0.5%
+           if current_chg > 0.2:
                # Deep Check: BPJS History
                stats = calculate_bpjs_performance(ticker, period="6mo")
                
-               if stats and stats['win_rate'] >= 60:
+               if stats and stats['win_rate'] >= 50: # Relaxed from 60
                     candidates.append({
                         "ticker": ticker,
                         "price": last['Close'],
