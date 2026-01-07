@@ -239,6 +239,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🧠 *DEEP INTELLIGENCE*\n"
         "• `/analisa <kode>` : AI Professional Analysis (Multi-Timeframe).\n"
         "• `/predict <kode>` : Future Projection (Scenario Mapping).\n"
+        "• `/predict_open <kode>` : Prediksi Harga Pembukaan Sesi 1 🔮\n"
         "• `/fibo <kode>`    : Auto-Fibonacci Golden Ratio 📐\n"
         "• `/chart <kode>`   : Ultimate Neon Chart (30 Days Focus).\n"
         "• `/xray <kode>`    : Infografis Deep Dive (Chart + Radar + Stats) 🩻\n"
