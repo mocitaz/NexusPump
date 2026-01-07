@@ -19,6 +19,7 @@ async def setup():
         BotCommand("screener", "Market Screener (Potensial)"),
         BotCommand("bsjp", "Sinyal Beli Sore Jual Pagi"),
         BotCommand("bpjs", "Sinyal Beli Pagi Jual Sore (Day Trade)"),
+        BotCommand("break", "Menu Jajan Siang (Session 2 Picks)"),
         BotCommand("picks", "Rekomendasi Besok (Prime Picks)"),
         BotCommand("sectors", "Peta Rotasi Sektor"),
         BotCommand("pulse", "Market Fear & Greed"),

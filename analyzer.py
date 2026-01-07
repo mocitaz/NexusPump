@@ -712,3 +712,66 @@ def analyze_radar_metrics(ticker):
     except Exception as e:
         logger.error(f"Radar Analysis Error {ticker}: {e}")
         return None
+
+def scan_session_break(watchlist):
+    """
+    V40: MENUS JAJAN SIANG (Break Session Scanner)
+    Criteria:
+    - High Relative Volume (> 50% Avg Vol by Noon)
+    - Strong Momentum (Price > Open, Change > 1%)
+    - Near Daily High (Strong Close for Session 1)
+    """
+    from data_fetcher import get_batch_historical_data
+    candidates = []
+    
+    # Batch fetch shorter period (1mo is enough for Avg Vol)
+    # Using 1mo data
+    batch_data = get_batch_historical_data(watchlist, period="1mo")
+    
+    for ticker, df in batch_data.items():
+        try:
+           if df.empty or len(df) < 20: continue
+           
+           last = df.iloc[-1]
+           prev = df.iloc[-2]
+           
+           current_price = last['Close']
+           current_vol = last['Volume']
+           day_open = last['Open']
+           day_high = last['High']
+           
+           # Calculate Avg Volume (excluding today)
+           avg_vol = df['Volume'].iloc[:-1].mean()
+           if avg_vol == 0: continue
+           
+           vol_ratio = current_vol / avg_vol
+           
+           if prev['Close'] == 0: continue
+           change_pct = ((current_price - prev['Close']) / prev['Close']) * 100
+           
+           # Session 1 Break Constraints:
+           # 1. Volume must be significative (> 50% of Daily Avg just in half day)
+           # 2. Bullish Candle (Close > Open)
+           # 3. Momentum (> 1% Gain)
+           # 4. Near High (Close within 3% of Day High) - "Strong Finish"
+           
+           near_high_threshold = day_high * 0.97
+           
+           if (vol_ratio > 0.5 and 
+               current_price > day_open and
+               change_pct > 1.0 and
+               current_price >= near_high_threshold):
+               
+               candidates.append({
+                   "ticker": ticker,
+                   "price": current_price,
+                   "change": change_pct,
+                   "vol_ratio": vol_ratio,
+                   "high": day_high
+               })
+               
+        except Exception: continue
+        
+    # Sort by Vol Ratio (Most active relative to norm)
+    candidates.sort(key=lambda x: x['vol_ratio'], reverse=True)
+    return candidates[:10]

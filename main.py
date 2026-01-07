@@ -69,6 +69,7 @@ async def channel_command_dispatcher(update: Update, context: ContextTypes.DEFAU
     cmd_map = {
         'start': start, 'harga': harga, 'chart': chart, 'analisa': analisa,
         'news': news, 'predict': predict, 'screener': screener, 'bsjp': bsjp, 'bpjs': bpjs,
+        'break': break_session,
         'picks': picks, 'sector': sectors, 'pulse': pulse, 'flow': flow, 
         'buy': buy, 'sell': sell, 'porto': porto, 'fibo': fibo, 'xray': xray
     }
@@ -971,6 +972,43 @@ async def bpjs(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg += "━━━━━━━━━━━━━━━━━━━━━━\n⚠️ _Win Rate: Probability of Closing Green (Open < Close)._"
     await waiting.edit_text(msg, parse_mode='Markdown')
 
+async def break_session(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    V40: SESSION BREAK SCANNER (Menu Jajan Siang)
+    """
+    msg = await update.message.reply_text("🍱 *Scanning Menu Jajan Siang...* (Session 1 Leaders)")
+    
+    try:
+        from analyzer import scan_session_break
+        from idx_tickers import IDX_WATCHLIST
+        
+        candidates = await asyncio.to_thread(scan_session_break, IDX_WATCHLIST)
+        
+        if not candidates:
+            await msg.edit_text("😴 *Market Sepi Boss*.\nBelum ada rekomendasi yang 'Matang' di sesi 1 ini.")
+            return
+            
+        text = (
+            "🍱 *MENU JAJAN SIANG (Session Break)* 🍱\n"
+            "Top Session 1 Performers to Buy for Session 2:\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+        )
+        
+        for c in candidates:
+             text += (
+                 f"🍽️ *{c['ticker']}* | Rp {c['price']:,.0f}\n"
+                 f"📈 *{c['change']:+.2f}%* | VolRatio: {c['vol_ratio']:.1f}x Avg\n"
+                 f"🔥 Close Near High (Daily High: {c['high']:,.0f})\n"
+                 f"──────────────────────\n"
+             )
+             
+        text += "\n💡 *Strategy*: Buy if Price holds above VWAP/Open in Session 2."
+        await msg.edit_text(text, parse_mode='Markdown')
+        
+    except Exception as e:
+        logger.error(f"Break Scan Error: {e}")
+        await msg.edit_text(f"❌ *Error scanning menu*: {e}")
+
 async def picks(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target_msg = update.message if update.message else update.callback_query.message
     waiting = await target_msg.reply_text("🔭 *Scanning Nexus Prime Watchlist (Tomorrow)...*", parse_mode='Markdown')
@@ -1098,6 +1136,7 @@ async def post_init(application):
         BotCommand("screener", "Market Screener (Potensial)"),
         BotCommand("bsjp", "Sinyal Beli Sore Jual Pagi"),
         BotCommand("bpjs", "Sinyal Beli Pagi Jual Sore (Day Trade)"),
+        BotCommand("break", "Menu Jajan Siang (Session 2 Picks)"),
         BotCommand("picks", "Rekomendasi Besok (Prime Picks)"),
         BotCommand("sectors", "Peta Rotasi Sektor"),
         BotCommand("pulse", "Market Fear & Greed"),
