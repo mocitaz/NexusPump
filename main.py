@@ -8,7 +8,7 @@ from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, Callb
 
 # Modules
 from data_fetcher import get_stock_price, get_top_gainers_losers_idx, get_stock_news, get_stock_fundamentals
-from chart_generator import generate_chart, generate_portfolio_pie, generate_xray_image
+from chart_generator import generate_chart, generate_portfolio_pie, generate_xray_image, generate_prediction_card
 from analyzer import analyze_stock, predict_future_price, scan_bsjp_strategy, scan_market_screener, scan_whale_flow, scan_top_picks, scan_sector_performance, calculate_fibonacci_levels, analyze_radar_metrics
 from market_pulse import calculate_market_mood, generate_gauge_chart
 from idx_tickers import IDX_WATCHLIST
@@ -430,14 +430,43 @@ async def predict(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     ticker = args[0].upper()
     target_msg = update.message if update.message else update.callback_query.message
-    waiting_msg = await target_msg.reply_text(f"🔮 Mengkalkulasi proyeksi harga *{ticker}*...", parse_mode='Markdown')
+    waiting_msg = await target_msg.reply_text(f"🔮 Mengkalkulasi proyeksi masa depan *{ticker}*...", parse_mode='Markdown')
     
-    res = predict_future_price(ticker)
+    # 1. Calculate Prediction (Async)
+    data = await asyncio.to_thread(predict_future_price, ticker)
+    
+    if not data:
+        await waiting_msg.edit_text(f"⚠️ Maaf, data {ticker} tidak cukup untuk prediksi AI.", parse_mode='Markdown')
+        return
+        
+    # 2. Generate Card (Async)
+    buf = await asyncio.to_thread(generate_prediction_card, data)
+    
+    # 3. Construct Caption
     time_str = datetime.datetime.now(pytz.timezone('Asia/Jakarta')).strftime('%H:%M')
-    res += f"\n\n⏰ Generated: {time_str} WIB"
     
+    caption = (
+        f"🔮 *NEXUS FUTURE SIGHT: {ticker}*\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🎯 *TARGET PRICE*: Rp {data['target']:,.0f}\n"
+        f"⏳ *TIMEFRAME*: 7 Days (Short Term)\n\n"
+        f"🛠️ *ANALYSIS LOGIC*\n"
+        f"• **Bias**: {data['bias']}\n"
+        f"• **Driver**: {data['reason']}\n"
+        f"• **Momentum**: RSI {data['rsi']:.1f}\n"
+        f"• **Confidence**: {data['confidence']}%\n\n"
+        f"⏰ *Generated*: {time_str} WIB\n"
+        f"💡 _Disclaimer: Prediction based on Linear Regression & Momentum Algorithm._"
+    )
+    
+    # 4. Send Result
     kb = get_common_keyboard(ticker)
-    await waiting_msg.edit_text(res, parse_mode='Markdown', reply_markup=kb)
+    
+    if buf:
+        await target_msg.reply_photo(photo=buf, caption=caption, parse_mode='Markdown', reply_markup=kb)
+        await waiting_msg.delete()
+    else:
+        await waiting_msg.edit_text(caption, parse_mode='Markdown', reply_markup=kb)
 
 async def pulse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target_msg = update.message if update.message else update.callback_query.message

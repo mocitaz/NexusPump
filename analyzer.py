@@ -240,11 +240,12 @@ def scan_market_screener(watchlist):
 def predict_future_price(ticker, days=7):
     """
     V23 ULTRA PREDICTION: VISUAL CONFIDENCE
+    Refactored in V35 to return Dictionary data for Card Generation.
     """
     try:
         # 1. Fetch Data
         df = get_historical_data(ticker, period="3mo") # Need more history for better context
-        if df.empty or len(df) < 30: return "⚠️ Data Insufficient."
+        if df.empty or len(df) < 30: return None
         
         last_close = df['Close'].iloc[-1]
         
@@ -267,7 +268,7 @@ def predict_future_price(ticker, days=7):
         if rsi > 60 and slope < 0:
             target = last_close * 1.05 # Assume 5% gain
             confidence = 65
-            reason = "Bullish Divergence (Price Reversal)"
+            reason = "Bullish Divergence (Reversal)"
             bias = "Bullish ↗️"
         elif rsi < 40 and slope > 0:
             target = last_close * 0.95
@@ -280,33 +281,23 @@ def predict_future_price(ticker, days=7):
             reason = "Trend Continuation"
             bias = "Uptrend ↗️" if slope > 0 else "Downtrend ↘️"
             
-        # 4. Visuals (Confidence Bar)
-        # Scale 0-100 to 10 blocks
-        conf_blocks = int(confidence / 10)
-        conf_bar = "█" * conf_blocks + "░" * (10 - conf_blocks)
-        
         change_pct = ((target - last_close) / last_close) * 100
         
-        msg = (
-            f"🔮 *NEXUS FUTURE SIGHT: {ticker}*\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🎯 *TARGET (7 Days)*\n"
-            f"Rp {target:,.0f} ({change_pct:+.1f}%)\n\n"
-            f"⚖️ *CONFIDENCE LEVEL*\n"
-            f"`[{conf_bar}]` {confidence}%\n"
-            f"Status: *{bias}*\n\n"
-            f"🛠️ *LOGIC BREAKDOWN*\n"
-            f"• **Reasoning**: {reason}\n"
-            f"• **Momentum** : RSI {rsi:.1f}\n"
-            f"• **Trend**    : Slope {slope:.1f}\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"⚠️ _Disclaimer: AI Projection using Linear Regression & Momentum._"
-        )
-        return msg
+        return {
+            "ticker": ticker,
+            "target": target,
+            "current_price": last_close,
+            "change_pct": change_pct,
+            "confidence": confidence,
+            "bias": bias,
+            "reason": reason,
+            "rsi": rsi,
+            "slope": slope
+        }
         
     except Exception as e:
         logger.error(f"Predict error {ticker}: {e}")
-        return "⚠️ Error."
+        return None
 
 def scan_whale_flow(watchlist):
     """
